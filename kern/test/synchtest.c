@@ -260,6 +260,7 @@ locktest(int nargs, char **args)
 	for (i=0; i<CREATELOOPS; i++) {
 		kprintf_t(".");
 		testlock = lock_create("testlock");
+		
 		if (testlock == NULL) {
 			panic("lt1: lock_create failed\n");
 		}
