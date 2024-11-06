@@ -288,7 +288,6 @@ cv_destroy(struct cv *cv)
 void
 cv_wait(struct cv *cv, struct lock *lock)
 {
-	// Write this
 	KASSERT(cv != NULL);
 	KASSERT(lock != NULL);
 	/*
@@ -296,9 +295,8 @@ cv_wait(struct cv *cv, struct lock *lock)
 	 * mutex before calling cv_wait
 	*/
 	KASSERT(lock_do_i_hold(lock)); // I think it is not needed
-	
-	lock_release(lock);
 	spinlock_acquire(&cv->cv_lock);
+	lock_release(lock);
 	wchan_sleep(cv->cv_wchan, &cv->cv_lock);
 	spinlock_release(&cv->cv_lock);
 	lock_acquire(lock);
@@ -308,18 +306,14 @@ cv_wait(struct cv *cv, struct lock *lock)
 void
 cv_signal(struct cv *cv, struct lock *lock)
 {
-	// Write this
 	KASSERT(cv != NULL);
 	KASSERT(lock != NULL);
 	KASSERT(lock_do_i_hold(lock));
-	// lock_acquire(lock);
-	// lock_release(lock);
 	spinlock_acquire(&cv->cv_lock);
-	if (wchan_isempty(cv->cv_wchan, &cv->cv_lock))
+	if (!wchan_isempty(cv->cv_wchan, &cv->cv_lock))
 		wchan_wakeone(cv->cv_wchan, &cv->cv_lock);
 	spinlock_release(&cv->cv_lock);
-	// lock_acquire(lock);
-	// lock_release(lock);
+
 }
 
 void

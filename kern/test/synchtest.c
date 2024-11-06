@@ -606,14 +606,14 @@ sleepthread(void *junk1, unsigned long junk2)
 		kprintf_t(".");
 		for (i=0; i<NCVS; i++) {
 			lock_acquire(testlocks[i]);
-			// random_yielder(4);
+			random_yielder(4);
 			V(gatesem);
-			// random_yielder(4);
+			random_yielder(4);
 			spinlock_acquire(&status_lock);
 			testval4++;
 			spinlock_release(&status_lock);
 			cv_wait(testcvs[i], testlocks[i]);
-			// random_yielder(4);
+			random_yielder(4);
 			lock_release(testlocks[i]);
 		}
 		kprintf_n("sleepthread: %u\n", j);
@@ -635,15 +635,15 @@ wakethread(void *junk1, unsigned long junk2)
 	for (j=0; j<NLOOPS; j++) {
 		kprintf_t(".");
 		for (i=0; i<NCVS; i++) {
-			// random_yielder(4);
+			random_yielder(4);
 			P(gatesem);
-			// random_yielder(4);
+			random_yielder(4);
 			lock_acquire(testlocks[i]);
-			// random_yielder(4);
+			random_yielder(4);
 			testval4--;
 			failif((testval4 != 0));
 			cv_signal(testcvs[i], testlocks[i]);
-			// random_yielder(4);
+			random_yielder(4);
 			lock_release(testlocks[i]);
 		}
 		kprintf_n("wakethread: %u\n", j);
