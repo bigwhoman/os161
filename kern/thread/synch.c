@@ -327,3 +327,144 @@ cv_broadcast(struct cv *cv, struct lock *lock)
 	wchan_wakeall(cv->cv_wchan, &cv->cv_lock);
 	spinlock_release(&cv->cv_lock);
 }
+
+////////////////////////////////////////////////////////////
+//
+// RW
+
+struct rwlock * rwlock_create(const char *name){
+	KASSERT(name != NULL);
+	struct rwlock *rwlock;
+
+	rwlock = kmalloc(sizeof(*rwlock));
+	if (rwlock == NULL) {
+		return NULL;
+	}
+
+	rwlock->rwlock_name = kstrdup(name);
+	if (rwlock->rwlock_name == NULL) {
+		kfree(rwlock);
+		return NULL;
+	}
+
+	rwlock->reader_sem = sem_create(rwlock->rwlock_name, RW_MAX_READER);
+
+	// rwlock->read_wchan = wchan_create(rwlock->rwlock_name);
+	
+
+	if (rwlock->reader_sem == NULL){
+		kfree(rwlock->rwlock_name);
+		kfree(rwlock);
+		return NULL;
+	}
+
+	rwlock->read_write_lock = lock_create(rwlock->rwlock_name);
+	if (rwlock->read_write_lock == NULL){
+		sem_destroy(rwlock->reader_sem);
+		kfree(rwlock->rwlock_name);
+		kfree(rwlock);
+		return NULL;
+	}
+
+	spinlock_init(&rwlock->read_lock);
+	if (rwlock->read_lock == NULL){
+		lock_destroy(rwlock->read_write_lock);
+		sem_destroy(rwlock->reader_sem);
+		kfree(rwlock->rwlock_name);
+		kfree(rwlock);
+		return NULL;
+	}
+
+	rwlock->writer_condvar = cv_create(rwlock->rwlock_name);
+
+	if (rwlock->writer_condvar == NULL){
+		spinlock_cleanup(&rwlock->read_lock);
+		lock_destroy(rwlock->read_write_lock);
+		sem_destroy(rwlock->reader_sem);
+		kfree(rwlock->rwlock_name);
+		kfree(rwlock);
+		return NULL;
+	}
+
+	rwlock->cv_lock = lock_create(rwlock->rwlock_name);
+	if (rwlock->cv_lock == NULL){
+		cv_destroy(rwlock->writer_condvar);
+		spinlock_cleanup(&rwlock->read_lock);
+		lock_destroy(rwlock->read_write_lock);
+		sem_destroy(rwlock->reader_sem);
+		kfree(rwlock->rwlock_name);
+		kfree(rwlock);
+		return NULL;
+	}
+
+	rwlock->readers = 0;
+	rwlock->writers = 0;
+	rwlock->seen_readers = 0;
+	rwlock->reader_has_lock = false;
+
+	KASSERT(lock->readers == 0);
+	KASSERT(lock->writers == 0);
+	return rwlock;
+};
+void rwlock_destroy(struct rwlock * lock){
+	KASSERT(lock != NULL);
+	KASSERT(lock->readers == 0);
+	KASSERT(lock->writers == 0);
+
+	lock_destroy(lock->cv_lock);
+	cv_destroy(lock->writer_condvar);
+	spinlock_cleanup(&lock->read_lock);
+	lock_destroy(lock->read_write_lock);
+	sem_destroy(lock->reader_sem);
+	kfree(lock->rwlock_name);
+	kfree(lock);
+};
+
+void rwlock_acquire_read(struct rwlock *lock){
+	KASSERT(lock != NULL);
+	P(lock->reader_sem);
+	spinlock_acquire(&lock->read_lock);
+	lock->readers ++;
+	/*
+     *		If we have seen a certain number of 
+	 *		readers and there were writers waiting, 
+	 *		we could use a condvar to make readers
+	 *	    sleep so that we would ensure no starvation
+	*/ 
+	while (lock->writers > 0 && lock->readers >= RW_MAX_READER) {
+		lock_acquire(lock->cv_lock);
+		cv_wait(lock->writer_condvar, lock->cv_lock);
+		lock->seen_readers = 0;
+	}
+	/*
+	 * 		If a reader has gained the lock, 
+	 *		then it means that other readers won't have to 
+	 *		aquire the lock
+	*/
+	while (!lock->reader_has_lock){
+		lock_acquire(lock->read_write_lock);
+		lock->reader_has_lock = true;
+	}
+	spinlock_release(&lock->read_lock);
+};
+
+void rwlock_release_read(struct rwlock *lock){
+	spinlock_acquire(&lock->read_lock);
+	
+	// if (lock->readers <= RW_MAX_READER){
+
+	// }
+	V(lock->reader_sem);
+	lock->readers --;
+	if (lock->readers == 0)
+		lock->reader_has_lock = false;
+	spinlock_release(&lock->read_lock);
+};
+
+void rwlock_acquire_write(struct rwlock *lock){
+
+};
+
+void rwlock_release_write(struct rwlock *lock){
+
+};
