@@ -164,7 +164,9 @@ struct rwlock {
         struct lock *read_write_lock;
         struct lock *cv_lock;
         struct spinlock read_lock;
+        struct spinlock write_lock;
         struct cv *writer_condvar;
+        struct cv *reader_condvar;
         volatile unsigned int readers;
         volatile unsigned int writers;
         volatile unsigned int seen_readers;

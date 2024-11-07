@@ -367,7 +367,7 @@ struct rwlock * rwlock_create(const char *name){
 	}
 
 	spinlock_init(&rwlock->read_lock);
-	if (rwlock->read_lock == NULL){
+	if (&rwlock->read_lock == NULL){
 		lock_destroy(rwlock->read_write_lock);
 		sem_destroy(rwlock->reader_sem);
 		kfree(rwlock->rwlock_name);
@@ -397,13 +397,37 @@ struct rwlock * rwlock_create(const char *name){
 		return NULL;
 	}
 
+	rwlock->reader_condvar = cv_create(rwlock->rwlock_name);
+
+	if (rwlock->reader_condvar == NULL){
+		lock_destroy(rwlock->cv_lock);
+		cv_destroy(rwlock->writer_condvar);
+		spinlock_cleanup(&rwlock->read_lock);
+		lock_destroy(rwlock->read_write_lock);
+		sem_destroy(rwlock->reader_sem);
+		kfree(rwlock->rwlock_name);
+		kfree(rwlock);
+		return NULL;
+	}
+
+	spinlock_init(&rwlock->write_lock);
+	if (&rwlock->write_lock == NULL){
+		cv_destroy(rwlock->reader_condvar);
+		lock_destroy(rwlock->cv_lock);
+		cv_destroy(rwlock->writer_condvar);
+		spinlock_cleanup(&rwlock->read_lock);
+		lock_destroy(rwlock->read_write_lock);
+		sem_destroy(rwlock->reader_sem);
+		kfree(rwlock->rwlock_name);
+		kfree(rwlock);
+		return NULL;
+	}
+	
+
 	rwlock->readers = 0;
 	rwlock->writers = 0;
 	rwlock->seen_readers = 0;
 	rwlock->reader_has_lock = false;
-
-	KASSERT(lock->readers == 0);
-	KASSERT(lock->writers == 0);
 	return rwlock;
 };
 void rwlock_destroy(struct rwlock * lock){
@@ -413,6 +437,7 @@ void rwlock_destroy(struct rwlock * lock){
 
 	lock_destroy(lock->cv_lock);
 	cv_destroy(lock->writer_condvar);
+	cv_destroy(lock->reader_condvar);
 	spinlock_cleanup(&lock->read_lock);
 	lock_destroy(lock->read_write_lock);
 	sem_destroy(lock->reader_sem);
@@ -425,15 +450,17 @@ void rwlock_acquire_read(struct rwlock *lock){
 	P(lock->reader_sem);
 	spinlock_acquire(&lock->read_lock);
 	lock->readers ++;
+	lock->seen_readers ++;
 	/*
      *		If we have seen a certain number of 
 	 *		readers and there were writers waiting, 
 	 *		we could use a condvar to make readers
 	 *	    sleep so that we would ensure no starvation
 	*/ 
-	while (lock->writers > 0 && lock->readers >= RW_MAX_READER) {
+	while (lock->writers > 0 && lock->seen_readers >= RW_MAX_READER) {
 		lock_acquire(lock->cv_lock);
 		cv_wait(lock->writer_condvar, lock->cv_lock);
+		lock_release(lock->cv_lock);
 		lock->seen_readers = 0;
 	}
 	/*
@@ -449,22 +476,58 @@ void rwlock_acquire_read(struct rwlock *lock){
 };
 
 void rwlock_release_read(struct rwlock *lock){
+	/*
+	*	We should be carefull here as only one reader thread 
+	*	has the mutex lock and we want that thread to sleep until all of 
+	*	the other reader threads have finished reading and 
+	*	then we could actully release the mutex lock	
+	*/
 	spinlock_acquire(&lock->read_lock);
-	
-	// if (lock->readers <= RW_MAX_READER){
-
-	// }
 	V(lock->reader_sem);
 	lock->readers --;
-	if (lock->readers == 0)
+	
+	
+	while(lock_do_i_hold(lock->read_write_lock) && lock->readers >= 1){
+		lock_acquire(lock->cv_lock);
+		spinlock_release(&lock->read_lock);
+		cv_wait(lock->reader_condvar, lock->cv_lock);
+		spinlock_acquire(&lock->read_lock);
+		lock_release(lock->cv_lock);
+	}
+	
+	/*
+	*	This is the last non mutex holder reader thread 
+	*	which should wake up the mutex holder reader
+	*/
+	if (!lock_do_i_hold(lock->read_write_lock) && lock->readers == 0){
+		lock_acquire(lock->cv_lock);
+		cv_signal(lock->reader_condvar, lock->cv_lock);
+		lock_release(lock->cv_lock);
+	}
+
+	/*
+	*	If we are the last mutex holder reader thread
+	*	we should clean up everything left, mark 
+	*	that reader does not have the lock and release the 
+	*	read/write lock
+	*/
+	if (lock_do_i_hold(lock->read_write_lock) && lock->readers == 0){
 		lock->reader_has_lock = false;
+		lock_release(lock->read_write_lock);
+	}
 	spinlock_release(&lock->read_lock);
 };
 
 void rwlock_acquire_write(struct rwlock *lock){
-
+	spinlock_acquire(&lock->write_lock);
+	lock_acquire(lock->read_write_lock);
+	lock->writers ++;
+	spinlock_release(&lock->write_lock);
 };
 
 void rwlock_release_write(struct rwlock *lock){
-
+	spinlock_acquire(&lock->write_lock);
+	lock->writers --;
+	lock_release(lock->read_write_lock);
+	spinlock_release(&lock->write_lock);
 };
