@@ -469,7 +469,9 @@ void rwlock_acquire_read(struct rwlock *lock){
 	 *		aquire the lock
 	*/
 	while (!lock->reader_has_lock){
+		spinlock_release(&lock->read_lock);
 		lock_acquire(lock->read_write_lock);
+		spinlock_acquire(&lock->read_lock);
 		lock->reader_has_lock = true;
 	}
 	spinlock_release(&lock->read_lock);
@@ -520,14 +522,22 @@ void rwlock_release_read(struct rwlock *lock){
 
 void rwlock_acquire_write(struct rwlock *lock){
 	spinlock_acquire(&lock->write_lock);
-	lock_acquire(lock->read_write_lock);
 	lock->writers ++;
+	spinlock_release(&lock->write_lock);
+	lock_acquire(lock->read_write_lock);
+	spinlock_acquire(&lock->write_lock);
+	KASSERT(!lock->reader_has_lock);
 	spinlock_release(&lock->write_lock);
 };
 
 void rwlock_release_write(struct rwlock *lock){
+
+	lock_acquire(lock->cv_lock);
+	cv_broadcast(lock->writer_condvar, lock->cv_lock);
+	lock_release(lock->cv_lock);
 	spinlock_acquire(&lock->write_lock);
-	lock->writers --;
+	KASSERT(!lock->reader_has_lock);
+	lock->writers --;	
 	lock_release(lock->read_write_lock);
 	spinlock_release(&lock->write_lock);
 };

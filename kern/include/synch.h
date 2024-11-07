@@ -155,7 +155,7 @@ void cv_broadcast(struct cv *cv, struct lock *lock);
  * (should be) made internally.
  */
 
-#define RW_MAX_READER 10
+#define RW_MAX_READER 5
 
 struct rwlock {
         char *rwlock_name;
