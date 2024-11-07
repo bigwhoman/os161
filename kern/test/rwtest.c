@@ -20,8 +20,8 @@
 #define NTHREADS      32
 #define SYNCHTEST_YIELDER_MAX 16
 #define SYNCHTEST_YIELDER_MAX 16
-#define READER_COUNT 3
-#define WRITER_COUNT 1
+#define READER_COUNT 10
+#define WRITER_COUNT 2
 #define MAX_READER 5
 #define ERROR_MARGIN 2
 
@@ -59,7 +59,7 @@ static
 bool
 failif(bool condition) {
 	if (condition) {
-		KASSERT(condition == !condition);
+		KASSERT(false);
 		spinlock_acquire(&status_lock);
 		test_status = TEST161_FAIL;
 		spinlock_release(&status_lock);
