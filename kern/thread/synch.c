@@ -449,8 +449,7 @@ void rwlock_acquire_read(struct rwlock *lock){
 	KASSERT(lock != NULL);
 	P(lock->reader_sem);
 	spinlock_acquire(&lock->read_lock);
-	lock->readers ++;
-	lock->seen_readers ++;
+	
 	/*
      *		If we have seen a certain number of 
 	 *		readers and there were writers waiting, 
@@ -459,7 +458,9 @@ void rwlock_acquire_read(struct rwlock *lock){
 	*/ 
 	while (lock->writers > 0 && lock->seen_readers >= RW_MAX_READER) {
 		lock_acquire(lock->cv_lock);
+		spinlock_release(&lock->read_lock);
 		cv_wait(lock->writer_condvar, lock->cv_lock);
+		spinlock_acquire(&lock->read_lock);
 		lock_release(lock->cv_lock);
 		lock->seen_readers = 0;
 	}
@@ -474,6 +475,8 @@ void rwlock_acquire_read(struct rwlock *lock){
 		spinlock_acquire(&lock->read_lock);
 		lock->reader_has_lock = true;
 	}
+	lock->readers ++;
+	lock->seen_readers ++;
 	spinlock_release(&lock->read_lock);
 };
 
@@ -521,23 +524,16 @@ void rwlock_release_read(struct rwlock *lock){
 };
 
 void rwlock_acquire_write(struct rwlock *lock){
-	spinlock_acquire(&lock->write_lock);
+	spinlock_acquire(&lock->read_lock);
 	lock->writers ++;
-	spinlock_release(&lock->write_lock);
+	spinlock_release(&lock->read_lock);
 	lock_acquire(lock->read_write_lock);
-	spinlock_acquire(&lock->write_lock);
+	cv_broadcast(lock->writer_condvar, lock->read_write_lock);
 	KASSERT(!lock->reader_has_lock);
-	spinlock_release(&lock->write_lock);
 };
 
 void rwlock_release_write(struct rwlock *lock){
-
-	lock_acquire(lock->cv_lock);
-	cv_broadcast(lock->writer_condvar, lock->cv_lock);
-	lock_release(lock->cv_lock);
-	spinlock_acquire(&lock->write_lock);
 	KASSERT(!lock->reader_has_lock);
 	lock->writers --;	
 	lock_release(lock->read_write_lock);
-	spinlock_release(&lock->write_lock);
 };

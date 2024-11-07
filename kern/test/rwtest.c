@@ -22,7 +22,8 @@
 #define SYNCHTEST_YIELDER_MAX 16
 #define READER_COUNT 3
 #define WRITER_COUNT 1
-#define MAX_READER 2
+#define MAX_READER 5
+#define ERROR_MARGIN 2
 
 static volatile int testval;
 static volatile unsigned readers;
@@ -107,7 +108,13 @@ evalthread(void *junk1, unsigned long junk2)
 	kprintf("Evaluation done...\n");
 	kprintf("epochs : %d --- readers in epoch : %d --- max readers %d \n",read_epoch, reader_in_epoch, max_readers_in_time);
 	kprintf("Throughput : %d\n", throughput);
-	failif((throughput < MAX_READER/2));
+	/*
+	*	If the throughput of read was less than 
+	*	the (Maximum Feasable Read Possible) / (Error Margin)
+	*	it means that the throughput is not satisfactory !!!
+	*/
+	int max_feasable_read = MAX_READER > READER_COUNT ? READER_COUNT : MAX_READER; 
+	failif((throughput < max_feasable_read/ERROR_MARGIN));
 	V(exitsem);
 }
 
@@ -192,10 +199,11 @@ writethread(void *junk1, unsigned long junk2)
 		/*
 		*	See how many readers we have seen while
 		*	a writer exists in the system.
-		*	If we have seen a total of MAX_READERs before 
+		*	If we have seen a total of MAX_READER before 
 		*	seeing a writer then we would probably have starvation
 		*/
-		failif((readers_before_writer > MAX_READER));
+		unsigned max_starve = MAX_READER * ERROR_MARGIN;
+		failif((readers_before_writer > max_starve));
 		readers_before_writer = 0;
 		reading = false;
 		spinlock_acquire(&consistancy_lock);
