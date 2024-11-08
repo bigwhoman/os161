@@ -250,6 +250,18 @@ writethread(void *junk1, unsigned long junk2)
 }
 
 
+/*
+*	This test is a full test of our rwlock
+*	it creates a bunch of threads to read and write 
+*	and then does the following : 
+*		1. Makes sure that multiple reads can 
+*			go through and we have good read concurrency
+*		
+*		2. Makes sure that write requests wont starve
+*		
+*		3. Makes sure the lock works correct and 
+*			data stays correct
+*/
 int rwtest(int nargs, char **args) {
 	(void)nargs;
 	(void)args;
@@ -344,6 +356,9 @@ int rwtest(int nargs, char **args) {
 	return 0;
 }
 
+/*
+*	Basicly tested in rwt1 (read throughput) :D
+*/
 int rwtest2(int nargs, char **args) {
 	(void)nargs;
 	(void)args;
@@ -357,9 +372,24 @@ int rwtest2(int nargs, char **args) {
 int rwtest3(int nargs, char **args) {
 	(void)nargs;
 	(void)args;
+	kprintf_n("Starting rwt3...\n");
+	testrw = rwlock_create("testrw");
+	if (testrw == NULL) {
+		panic("rwt3: rw_create failed\n");
+	}
 
-	kprintf_n("rwt3 unimplemented\n");
+	rwlock_acquire_read(testrw);
+
+	secprintf(SECRET, "Should panic...", "rwt3");
+
+	rwlock_destroy(testrw);
+
+	/* Should not get here on success. */
+
 	success(TEST161_FAIL, SECRET, "rwt3");
+
+	rwlock_destroy(testrw);
+	testrw = NULL;
 
 	return 0;
 }
