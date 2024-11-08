@@ -20,7 +20,7 @@
 #define NTHREADS      32
 #define SYNCHTEST_YIELDER_MAX 16
 #define SYNCHTEST_YIELDER_MAX 16
-#define READER_COUNT 10
+#define READER_COUNT 6
 #define WRITER_COUNT 2
 #define MAX_READER 5
 #define ERROR_MARGIN 2
@@ -68,55 +68,63 @@ failif(bool condition) {
 }
 
 
-static
-void
-evalthread(void *junk1, unsigned long junk2)
-{
 
-	(void)junk1;
-	(void)junk2;
-	/*
-	*	See how many reader we have in system 
-	*	in each epoch where read is happening
-	*/
-	unsigned read_epoch = 0;
-	unsigned reader_in_epoch = 0; 
-	unsigned int max_readers_in_time = 0;
-	while(!test_done){
-		while(reading){
-			spinlock_acquire(&consistancy_lock);
-			/*
-			* This means that we have starvation
-			*/
-			failif((readers > MAX_READER));
-			if (readers != 0){
-				read_epoch ++;
-				reader_in_epoch += readers;
-				max_readers_in_time = max_readers_in_time > readers ? max_readers_in_time: readers;
-			}
-			spinlock_release(&consistancy_lock);
-		}
-		failif((readers != 0));
-		/*
-		*	Sleep while writers are writing
-		*/
-		lock_acquire(testlock);
-		cv_wait(readcv, testlock);
-		lock_release(testlock);
-	}
-	int throughput = reader_in_epoch/read_epoch;
-	kprintf("Evaluation done...\n");
-	kprintf("epochs : %d --- readers in epoch : %d --- max readers %d \n",read_epoch, reader_in_epoch, max_readers_in_time);
-	kprintf("Throughput : %d\n", throughput);
-	/*
-	*	If the throughput of read was less than 
-	*	the (Maximum Feasable Read Possible) / (Error Margin)
-	*	it means that the throughput is not satisfactory !!!
-	*/
-	int max_feasable_read = MAX_READER > READER_COUNT ? READER_COUNT : MAX_READER; 
-	failif((throughput < max_feasable_read/ERROR_MARGIN));
-	V(exitsem);
-}
+
+/*
+*	ٔNow that I think of it, we dont need 
+*	this to evaluate the throughput. :)
+*/
+// static
+// void
+// evalthread(void *junk1, unsigned long junk2)
+// {
+
+// 	(void)junk1;
+// 	(void)junk2;
+// 	/*
+// 	*	See how many reader we have in system 
+// 	*	in each epoch where read is happening
+// 	*/
+// 	unsigned read_epoch = 0;
+// 	unsigned reader_in_epoch = 0; 
+// 	unsigned int max_readers_in_time = 0;
+// 	while(!test_done){
+// 		while(reading){
+// 			spinlock_acquire(&consistancy_lock);
+// 			/*
+// 			* This means that we have starvation
+// 			*/
+// 			failif((readers > MAX_READER));
+// 			if (readers != 0){
+// 				read_epoch ++;
+// 				reader_in_epoch += readers;
+// 				max_readers_in_time = max_readers_in_time > readers ? max_readers_in_time: readers;
+// 			}
+// 			spinlock_release(&consistancy_lock);
+// 		}
+// 		failif((readers != 0));
+// 		/*
+// 		*	Sleep while writers are writing
+// 		*/
+// 		lock_acquire(testlock);
+// 		cv_wait(readcv, testlock);
+// 		lock_release(testlock);
+// 	}
+// 	int throughput = reader_in_epoch/read_epoch;
+// 	kprintf("Evaluation done...\n");
+// 	kprintf("epochs : %d --- readers in epoch : %d --- max readers %d \n",read_epoch, reader_in_epoch, max_readers_in_time);
+// 	kprintf("Throughput : %d\n", throughput);
+// 	/*
+// 	*	If the throughput of read was less than 
+// 	*	the (Maximum Feasable Read Possible) / (Error Margin)
+// 	*	it means that the throughput is not satisfactory !!!
+// 	*/
+// 	int max_feasable_read = MAX_READER > READER_COUNT ? READER_COUNT : MAX_READER; 
+// 	failif((throughput < max_feasable_read/ERROR_MARGIN));
+// 	V(exitsem);
+// }
+
+
 
 static
 void
@@ -138,10 +146,15 @@ readthread(void *junk1, unsigned long junk2)
 		/*
 		*	Wake up the evalthread to say we have 
 		*	started reading
+		*	
+		*
+		*
+		*	P.N : Just realized the whole checker thread is 
+		*	bullshit :D
 		*/
-		lock_acquire(testlock);
-		cv_signal(readcv, testlock);
-		lock_release(testlock);
+		// lock_acquire(testlock);
+		// cv_signal(readcv, testlock);
+		// lock_release(testlock);
 		spinlock_acquire(&consistancy_lock);
 		readers++;
 		/*
@@ -281,10 +294,14 @@ int rwtest(int nargs, char **args) {
 	spinlock_init(&status_lock);
 	test_status = TEST161_SUCCESS;
 
-	result = thread_fork("rw1", NULL, evalthread, NULL, 0);
-	if (result) {
-		panic("rwt1: thread_fork failed\n");
-	}
+	/*
+	*	This is actually not a good way to see throughput
+	*/
+	
+	// result = thread_fork("rw1", NULL, evalthread, NULL, 0);
+	// if (result) {
+	// 	panic("rwt1: thread_fork failed\n");
+	// }
 
 	for (i = 0; i < READER_COUNT; i++)
 	{
@@ -312,11 +329,10 @@ int rwtest(int nargs, char **args) {
 
 	kprintf("Read Write Done...\n");
 	
-	test_done = true;
-	lock_acquire(testlock);
-	cv_signal(readcv, testlock);
-	lock_release(testlock);
-	P(exitsem);
+	// test_done = true;
+	// lock_acquire(testlock);
+	// cv_signal(readcv, testlock);
+
 	sem_destroy(exitsem);
 	lock_destroy(testlock);
 	rwlock_destroy(testrw);

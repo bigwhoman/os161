@@ -456,7 +456,7 @@ void rwlock_acquire_read(struct rwlock *lock){
 	 *		we could use a condvar to make readers
 	 *	    sleep so that we would ensure no starvation
 	*/ 
-	while (lock->writers > 0 && lock->seen_readers >= RW_MAX_READER) {
+	while (lock->writers > 0 && lock->seen_readers >= RW_MAX_READER - 1) {
 		lock_acquire(lock->cv_lock);
 		spinlock_release(&lock->read_lock);
 		cv_wait(lock->writer_condvar, lock->cv_lock);
