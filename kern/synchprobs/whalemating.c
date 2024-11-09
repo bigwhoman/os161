@@ -83,6 +83,17 @@ void whalemating_init() {
 
 void
 whalemating_cleanup() {
+	cv_destroy(malecv);
+	cv_destroy(femalecv);
+	cv_destroy(matchmakercv);
+	lock_destroy(malelock);
+	lock_destroy(femalelock);
+	lock_destroy(matchmakerlock);
+	lock_destroy(datalock);
+	sem_destroy(male_done);
+	sem_destroy(female_done);
+	sem_destroy(male_can_end);
+	sem_destroy(female_can_end);
 	return;
 }
 
@@ -109,7 +120,7 @@ male(uint32_t index)
 		cv_wait(malecv, malelock);
 		lock_acquire(datalock);
 	}
-	kprintf("loopa\n");
+	// kprintf("loopa\n");
 	lock_release(datalock);
 	V(male_done);
 	P(male_can_end);
@@ -175,7 +186,7 @@ matchmaker(uint32_t index)
 		cv_wait(matchmakercv, matchmakerlock);
 		lock_acquire(datalock);
 	}
-	kprintf("koopa\n");
+	// kprintf("koopa\n");
 	matchmaker_count ++;
 	lock_release(datalock);
 	lock_acquire(malelock);
