@@ -55,6 +55,23 @@ uiomove(void *ptr, size_t n, struct uio *uio)
 		KASSERT(uio->uio_space == proc_getas());
 	}
 
+	/* While there remains some amount of data to transfer, 
+	 * 1. Get the data block(s?) 
+	 * 2. Check size of data block(?) 
+	 * 3. If the transfer is from Kernel space to Kernel space : 
+	 * 			do regular memmove
+	 * 4. If the transfer is from user process data : 
+	 * 			do nothing
+	 * 5. If the transfer is from user process instructions : 
+	 * 			do copyin/out
+	 * n is to make sure we dont overflow
+	 * 
+	 * 
+	 * 
+	 * 
+	 * kbuffer <-> kbuffer (uio->..kbase) = UIO_SYSSPACE
+	 * kbuffer <-> ubuffer (uio->..ubase) = UIO_USERSPACE
+	 */
 	while (n > 0 && uio->uio_resid > 0) {
 		/* get the first iovec */
 		iov = uio->uio_iov;
@@ -79,8 +96,19 @@ uiomove(void *ptr, size_t n, struct uio *uio)
 			}
 			continue;
 		}
-
+		/*
+		 * 
+		 * iov->iov_kbase is to make sure that the source of the pointer (who called the pointer) is in kernel space
+		 * iov->iov_ubase shows that the source of pointer is in the user space
+		 * 
+		 */
 		switch (uio->uio_segflg) {
+			/*
+			 *
+			 * First Case : uio struct which determines the data region pointer is from the kernel (?)
+			 * We are in the kernel so we have kbase and ubase, now we know that the kernel is the one 
+			 * who has determined where to put the data (uio segment flag = UIO_SYSSPACE). Hence, we need to use kbase and memmov.
+			 */
 		    case UIO_SYSSPACE:
 			    if (uio->uio_rw == UIO_READ) {
 				    memmove(iov->iov_kbase, ptr, size);
@@ -90,6 +118,12 @@ uiomove(void *ptr, size_t n, struct uio *uio)
 			    }
 			    iov->iov_kbase = ((char *)iov->iov_kbase+size);
 			    break;
+			/*
+			 *
+			 * Second Case : uio struct which determines the data region pointer is from the user (?)
+			 * We are in the kernel so we have kbase and ubase, now we know that the user is the one 
+			 * who has determined where to put the data (uio segment flag = UIO_USERISPACE). Hence, we need to use ubase and copyin/out
+			 */
 		    case UIO_USERSPACE:
 		    case UIO_USERISPACE:
 			    if (uio->uio_rw == UIO_READ) {

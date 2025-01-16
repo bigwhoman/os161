@@ -93,6 +93,12 @@ load_segment(struct addrspace *as, struct vnode *v,
 	DEBUG(DB_EXEC, "ELF: Loading %lu bytes to 0x%lx\n",
 	      (unsigned long) filesize, (unsigned long) vaddr);
 
+	/*
+	 * 
+	 * Basically set the uio to user space 
+	 * should set the iov (uio data blocks) to a ubase (used in kernel but with the caller being a user)
+	 * seg flag is in user space (data/instruction)
+	 */
 	iov.iov_ubase = (userptr_t)vaddr;
 	iov.iov_len = memsize;		 // length of the memory space
 	u.uio_iov = &iov;
@@ -260,6 +266,12 @@ load_elf(struct vnode *v, vaddr_t *entrypoint)
 
 	/*
 	 * Now actually load each segment.
+	 * 
+	 * Basically first we setup a kuio (uio for kernel buffers)
+	 * Program Header Table = e_phoff
+	 * For each segment(which is determined by a program header) :
+	 * 		Program Header Entry[i] = Prograom Header Table + i * ph_table_entry_size
+	 * 
 	 */
 
 	for (i=0; i<eh.e_phnum; i++) {
@@ -278,10 +290,10 @@ load_elf(struct vnode *v, vaddr_t *entrypoint)
 		}
 
 		switch (ph.p_type) {
-		    case PT_NULL: /* skip */ continue;
-		    case PT_PHDR: /* skip */ continue;
+		    case PT_NULL: /* Unused Entry         - skip */ continue;
+		    case PT_PHDR: /* Program Header Table - skip */ continue;
 		    case PT_MIPS_REGINFO: /* skip */ continue;
-		    case PT_LOAD: break;
+		    case PT_LOAD: /* Loadable Segment (thing we want)*/ break;
 		    default:
 			kprintf("loadelf: unknown segment type %d\n",
 				ph.p_type);
