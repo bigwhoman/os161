@@ -50,6 +50,10 @@
  * Does not return except on error.
  *
  * Calls vfs_open on progname and thus may destroy it.
+ * 
+ * 
+ * 
+ * Q : What about program input arguments ?? :)
  */
 int
 runprogram(char *progname)

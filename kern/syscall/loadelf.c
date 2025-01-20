@@ -73,6 +73,11 @@
  * executable whose load address is in kernel space. If you should
  * change this code to not use uiomove, be sure to check for this case
  * explicitly.
+ * 
+ * 
+ * 
+ * My Notes : This code is basically creating a user space uio which loads a segment
+ * 				in other words : it is loading the user program's segment
  */
 static
 int
@@ -317,3 +322,21 @@ load_elf(struct vnode *v, vaddr_t *entrypoint)
 
 	return 0;
 }
+
+
+
+/* This is the program header table entry :
+
+typedef struct
+{
+Elf64_Word p_type;  Type of segment 
+Elf64_Word p_flags; Segment attributes 
+Elf64_Off p_offset; Offset in file 
+Elf64_Addr p_vaddr;  Virtual address in memory 
+Elf64_Addr p_paddr;  Reserved 
+Elf64_Xword p_filesz;  Size of segment in file 
+Elf64_Xword p_memsz;  Size of segment in memory 
+Elf64_Xword p_align;  Alignment of segment
+} Elf64_Phdr;
+
+*/

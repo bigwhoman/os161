@@ -77,7 +77,7 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 
 	KASSERT(code < NTRAPCODES);
 	switch (code) {
-	    case EX_IRQ:
+	    case EX_IRQ: /* Intrupt handler */
 	    case EX_IBE:
 	    case EX_DBE:
 	    case EX_SYS:
@@ -85,8 +85,8 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 		KASSERT(0);
 		sig = SIGABRT;
 		break;
-	    case EX_MOD:
-	    case EX_TLBL:
+	    case EX_MOD: /* Shootdowns maybe ? */
+	    case EX_TLBL: /* Used for memory load */
 	    case EX_TLBS:
 		sig = SIGSEGV;
 		break;
@@ -143,6 +143,7 @@ mips_trap(struct trapframe *tf)
 	KASSERT(code < NTRAPCODES);
 
 	/* Make sure we haven't run off our stack */
+	/* So basically trap frame is in the stack */
 	if (curthread != NULL && curthread->t_stack != NULL) {
 		KASSERT((vaddr_t)tf > (vaddr_t)curthread->t_stack);
 		KASSERT((vaddr_t)tf < (vaddr_t)(curthread->t_stack
