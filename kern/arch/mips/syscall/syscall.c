@@ -118,6 +118,11 @@ syscall(struct trapframe *tf)
 
 		break;
 
+		case SYS_read:
+		err = sys_read();
+
+		break;
+
 		case SYS__exit :
 		err = sys_exit();
 

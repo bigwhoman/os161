@@ -82,7 +82,7 @@ ssize_t sys_write(int fd, const void *buf, size_t buflen, int *retval){
     char kern_buff[buflen+1];
 
     kern_buff[buflen] = '\0';
-    err = copyinstr(buf, kern_buff, buflen, (size_t *)retval);
+    err = copyinstr(buf, kern_buff, buflen+1, (size_t *)retval);
     if(err){
         *retval = -1;
         return err;
