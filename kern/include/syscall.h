@@ -61,7 +61,8 @@ int sys_reboot(int code);
 int sys___time(userptr_t user_seconds, userptr_t user_nanoseconds);
 
 int sys_write(int fd, const void *buf, size_t buflen, int *retval);
+int sys_read(int fd, void *buf, size_t buflen, int *retval);
 int sys_exit(void);
-int sys_read(void);
+
 
 #endif /* _SYSCALL_H_ */

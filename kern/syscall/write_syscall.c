@@ -87,6 +87,10 @@ ssize_t sys_write(int fd, const void *buf, size_t buflen, int *retval){
         *retval = -1;
         return err;
     }
+	/*
+	 *	This is probably not the right approach as dup2 could bind 
+	 *	the standard output to sth else (Need to change this)
+	 */
     if(fd == STDOUT_FILENO){
         console_send(NULL, kern_buff, *(size_t *)retval);
     } else {
