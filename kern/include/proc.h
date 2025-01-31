@@ -44,7 +44,7 @@ struct thread;
 struct vnode;
 
 
-#define MAX_FD 5 // Maximum amount of open files a process could have
+#define MAX_FD 20 // Maximum amount of open files a process could have
 /*
  * Process structure.
  *
