@@ -390,6 +390,7 @@ file      syscall/time_syscalls.c
 file      syscall/write_syscall.c
 file      syscall/wait_exit_syscall.c
 file      syscall/read_syscall.c
+file      syscall/open_syscall.c
 #
 # Startup and initialization
 #

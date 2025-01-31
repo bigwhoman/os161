@@ -126,6 +126,13 @@ syscall(struct trapframe *tf)
 
 		break;
 
+		case SYS_open:
+		err = sys_open((char *)tf->tf_a0,
+		 			(int)tf->tf_a1,
+		  				(mode_t)tf->tf_a2,
+						&retval);
+		break;
+
 		case SYS__exit :
 		err = sys_exit();
 

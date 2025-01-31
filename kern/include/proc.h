@@ -37,11 +37,14 @@
  */
 
 #include <spinlock.h>
+#include <vnode.h>
 
 struct addrspace;
 struct thread;
 struct vnode;
 
+
+#define MAX_FD 5 // Maximum amount of open files a process could have
 /*
  * Process structure.
  *
@@ -70,6 +73,9 @@ struct proc {
 	/* VFS */
 	struct vnode *p_cwd;		/* current working directory */
 
+	struct vnode *fd_table[MAX_FD];		/* file descriptor table */
+
+	unsigned max_fd;
 	/* add more material here as needed */
 };
 
