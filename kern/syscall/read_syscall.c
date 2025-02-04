@@ -134,6 +134,7 @@ int sys_read(volatile int fd, void *buf, size_t buflen, int *retval){
 			/* short read; problem with executable? */
 			KASSERT(false);
 		}
+		*retval = buflen - u.uio_resid;
 	}
 
     if(err){

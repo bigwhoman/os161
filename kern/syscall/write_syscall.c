@@ -120,9 +120,10 @@ ssize_t sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
 		}
 
 		if (u.uio_resid != 0) {
-			/* short read; problem with executable? */
+			/* short read; problem? */
 			KASSERT(false);
 		}
+		*retval=buflen-u.uio_resid;
     }
     return err;
 }
