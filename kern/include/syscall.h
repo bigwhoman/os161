@@ -64,6 +64,6 @@ int sys_write(int fd, const void *buf, size_t buflen, int *retval);
 int sys_read(int fd, void *buf, size_t buflen, int *retval);
 int sys_open(char *filename, int flags, mode_t mode, int *retval);
 int sys_exit(void);
-
+int sys_execv(const char *program, char **args, int *retval);
 
 #endif /* _SYSCALL_H_ */

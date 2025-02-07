@@ -94,7 +94,7 @@ ssize_t sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
 	 *	This is probably not the right approach as dup2 could bind 
 	 *	the standard output to sth else (Need to change this)
 	 */
-    if(fd == STDOUT_FILENO){
+    if(fd == STDOUT_FILENO || fd == STDERR_FILENO){
         console_send(NULL, kern_buff, *(size_t *)retval);
     } else {
         struct vnode *v;

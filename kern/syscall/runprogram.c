@@ -56,13 +56,19 @@
  * Q : What about program input arguments ?? :)
  */
 int
-runprogram(char *progname)
+runprogram(char *progname, int argc, char *argv[])
 {
 	struct addrspace *as;
 	struct vnode *v;
 	vaddr_t entrypoint, stackptr;
 	int result;
-
+	size_t i;
+	kprintf("---------------------\n");
+	for (i = 0; i < (size_t)argc; i++)
+	{
+		kprintf("arg %d ----> %s\n",i, argv[i]);
+	}
+	
 	/* Open the file. */
 	result = vfs_open(progname, O_RDONLY, 0, &v);
 	if (result) {
