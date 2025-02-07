@@ -44,6 +44,7 @@
 #include <vfs.h>
 #include <syscall.h>
 #include <test.h>
+#include <copyinout.h>
 
 /*
  * Load program "progname" and start running it in usermode.
@@ -62,11 +63,11 @@ runprogram(char *progname, int argc, char *argv[])
 	struct vnode *v;
 	vaddr_t entrypoint, stackptr;
 	int result;
-	size_t i;
-	kprintf("---------------------\n");
+	size_t i, all;
+	all = 0;
 	for (i = 0; i < (size_t)argc; i++)
 	{
-		kprintf("arg %d ----> %s\n",i, argv[i]);
+		all += strlen(argv[i]) + 1;
 	}
 	
 	/* Open the file. */
@@ -105,12 +106,26 @@ runprogram(char *progname, int argc, char *argv[])
 	if (result) {
 		/* p_addrspace will go away when curproc is destroyed */
 		return result;
+	}	
+
+	/* Put arguments on the stack */
+
+	vaddr_t strloc = (vaddr_t)(stackptr - all);
+	strloc &= 0xfffffffc;
+	vaddr_t argptr = strloc - argc * sizeof(char *); 
+
+	for (i = 0; i < (size_t)argc; i++)
+	{
+		*((vaddr_t *)argptr + i) = strloc;
+		strcpy((char *)strloc, argv[i]);
+		strloc += strlen(argv[i]) + 1;
 	}
 
+
 	/* Warp to user mode. */
-	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
+	enter_new_process(argc-1 /*argc*/, (void *)argptr /*userspace addr of argv*/,
 			  NULL /*userspace addr of environment*/,
-			  stackptr, entrypoint);
+			  argptr , entrypoint);
 
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
