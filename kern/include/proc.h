@@ -38,12 +38,20 @@
 
 #include <spinlock.h>
 #include <vnode.h>
+#include <synch.h>
+#include <bitmap.h>
 
 struct addrspace;
 struct thread;
 struct vnode;
 
 
+struct lock* pid_lock;
+struct bitmap* pid_bitmap;
+
+
+#define MAX_PID 2<<15
+#define MIN_PID 2
 #define MAX_FD 20 // Maximum amount of open files a process could have
 /*
  * Process structure.
@@ -64,6 +72,7 @@ struct vnode;
  */
 struct proc {
 	char *p_name;			/* Name of this process */
+	unsigned int pid;
 	struct spinlock p_lock;		/* Lock for this structure */
 	unsigned p_numthreads;		/* Number of threads in this process */
 
@@ -76,6 +85,16 @@ struct proc {
 	struct vnode *fd_table[MAX_FD];		/* file descriptor table */
 
 	unsigned max_fd;
+
+	/* Communication with parent */
+	struct proc *parent;
+
+	/* condvar and its lock for wait */
+	struct cv *cv;
+	struct lock *cv_lock;
+	pid_t waiting_for_pid;
+
+
 	/* add more material here as needed */
 };
 

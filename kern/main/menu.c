@@ -44,6 +44,7 @@
 #include <syscall.h>
 #include <test.h>
 #include <prompt.h>
+#include <current.h>
 #include "opt-sfs.h"
 #include "opt-net.h"
 #include "opt-synchprobs.h"
@@ -69,7 +70,7 @@
  * change it so it can, because that will make testing much easier
  * in the future.
  * 
- * :D Trying to add arguments 
+ * :D Trying to add arguments - Done
  *
  * It copies the program name because runprogram destroys the copy
  * it gets by passing it to vfs_open().
@@ -142,6 +143,15 @@ common_prog(int nargs, char **args)
 		proc_destroy(proc);
 		return result;
 	}
+
+	/*
+	 * We'll add a wait later when wait is done
+	 * until that point lets explicitly 
+	 * NVM, We'll do some shit
+	*/
+
+	lock_acquire(curproc->cv_lock);
+	cv_wait(curproc->cv, curproc->cv_lock);
 
 	/*
 	 * The new process will be destroyed when the program exits...
@@ -928,5 +938,6 @@ menu(char *args)
 		kprintf(KERNEL_PROMPT);
 		kgets(buf, sizeof(buf));
 		menu_execute(buf, 0);
+		
 	}
 }

@@ -8,16 +8,22 @@
 #include <addrspace.h>
 
 
-int sys_execv(const char *program, char **args, int *retval){
-    struct addrspace *as;
+int sys_execv(const char *program, char *argv[], int *retval){
+
     struct vnode *v;
     vaddr_t stackptr, entrypoint;
     int result;
     int argc;
+    size_t i, all;
     // size_t i;
     
-    argc = sizeof(args)/sizeof(char *);
+    argc = sizeof(argv)/sizeof(char *);
     
+	all = 0;
+	for (i = 0; i < (size_t)argc; i++)
+	{
+		all += strlen(argv[i]) + 1;
+	}
 
     /* First Lets open the file */
     result = vfs_open((char *)program, O_RDONLY, 0, &v);
@@ -29,7 +35,7 @@ int sys_execv(const char *program, char **args, int *retval){
     /* The address space should not be NULL :/ */
     KASSERT(proc_getas() != NULL);
 
-    as = proc_getas();
+    // as = proc_getas();
 
     result = load_elf(v, &entrypoint);
 	if (result) {
@@ -43,17 +49,23 @@ int sys_execv(const char *program, char **args, int *retval){
 	vfs_close(v);
 
     /* Define the user stack in the address space */
-	result = as_define_stack(as, &stackptr);
-	if (result) {
-		/* p_addrspace will go away when curproc is destroyed */
-        *retval = -1;
-		return result;
+	stackptr = USERSTACK;
+
+    vaddr_t strloc = (vaddr_t)(stackptr - all);
+	strloc &= 0xfffffffc;
+	vaddr_t argptr = strloc - argc * sizeof(char *); 
+
+	for (i = 0; i < (size_t)argc; i++)
+	{
+		*((vaddr_t *)argptr + i) = strloc;
+		strcpy((char *)strloc, argv[i]);
+		strloc += strlen(argv[i]) + 1;
 	}
 
     /* Warp to user mode. */
-	enter_new_process(argc /*argc*/, NULL /*userspace addr of argv*/,
+	enter_new_process(argc-1 /*argc*/, (void *)argptr /*userspace addr of argv*/,
 			  NULL /*userspace addr of environment*/,
-			  stackptr, entrypoint);
+			  argptr , entrypoint);
 
 	/* enter_new_process does not return. */
 	// panic("enter_new_process returned\n");

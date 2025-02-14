@@ -84,6 +84,31 @@ proc_create(const char *name)
 
 	proc->max_fd = MAX_FD;
 
+	/* Setup its Parent 
+		If a proc is its own parent just set the parent to NULL
+	*/
+	if (strcmp(name, "[kernel]") && proc != curproc)
+		proc -> parent = curproc;
+
+	/* Setup the condvar (and condvar lock) for this (Needed for Wait) */
+	proc -> cv = cv_create(name);
+	proc -> cv_lock = lock_create(name);
+
+	
+
+	/* Set the process pid */
+	
+	if (strcmp(name, "[kernel]") && proc != curproc){
+		lock_acquire(pid_lock);
+		bitmap_alloc(pid_bitmap, &proc->pid);
+		lock_release(pid_lock);
+	} else {
+		bitmap_mark(pid_bitmap, 0);
+		bitmap_mark(pid_bitmap, 1);
+		proc -> pid = 1;
+	}
+	
+
 	return proc;
 }
 
@@ -170,7 +195,23 @@ proc_destroy(struct proc *proc)
 	KASSERT(proc->p_numthreads == 0);
 	spinlock_cleanup(&proc->p_lock);
 
+	/* Empty Pid in pid bitmap */
+	lock_acquire(pid_lock);
+	bitmap_unmark(pid_bitmap, proc->pid);
+	lock_release(pid_lock);
+
+
+
+	/* Free the file-descriptor table 
+		** Hoping things dont blow up by this :)
+	*/
+	kfree(proc->fd_table);
 	kfree(proc->p_name);
+
+	proc->parent = NULL;
+	cv_destroy(proc->cv);
+	lock_destroy(proc->cv_lock);
+	
 	kfree(proc);
 }
 
@@ -180,6 +221,8 @@ proc_destroy(struct proc *proc)
 void
 proc_bootstrap(void)
 {
+	pid_lock = lock_create("Pid Lock");
+	pid_bitmap = bitmap_create(16);
 	kproc = proc_create("[kernel]");
 	if (kproc == NULL) {
 		panic("proc_create for kproc failed\n");
@@ -191,6 +234,9 @@ proc_bootstrap(void)
  *
  * It will have no address space and will inherit the current
  * process's (that is, the kernel menu's) current directory.
+ * 
+ * TODO : Setup parent here
+ * 
  */
 struct proc *
 proc_create_runprogram(const char *name)
