@@ -92,7 +92,7 @@ struct proc {
 	/* condvar and its lock for wait */
 	struct cv *cv;
 	struct lock *cv_lock;
-	pid_t waiting_for_pid;
+	unsigned int waiting_for_pid;
 
 
 	/* add more material here as needed */

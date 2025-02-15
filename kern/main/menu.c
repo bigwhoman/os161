@@ -132,6 +132,10 @@ common_prog(int nargs, char **args)
 		return ENOMEM;
 	}
 
+	lock_acquire(curproc -> cv_lock);
+	curproc -> waiting_for_pid = proc -> pid;
+	lock_release(curproc -> cv_lock);
+
 	tc = thread_count;
 
 	result = thread_fork(args[0] /* thread name */,
@@ -143,15 +147,6 @@ common_prog(int nargs, char **args)
 		proc_destroy(proc);
 		return result;
 	}
-
-	/*
-	 * We'll add a wait later when wait is done
-	 * until that point lets explicitly 
-	 * NVM, We'll do some shit
-	*/
-
-	lock_acquire(curproc->cv_lock);
-	cv_wait(curproc->cv, curproc->cv_lock);
 
 	/*
 	 * The new process will be destroyed when the program exits...
@@ -904,6 +899,15 @@ menu_execute(char *line, int isargs)
 			}
 		}
 	}
+
+	/*
+	 * Tell the main kernel thread to wait for the program to finish
+	*/
+
+	lock_acquire(curproc->cv_lock);
+	while(curproc->waiting_for_pid > 0)
+		cv_wait(curproc->cv, curproc->cv_lock);
+	lock_release(curproc->cv_lock);
 }
 
 /*

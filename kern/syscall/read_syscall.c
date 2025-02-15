@@ -95,14 +95,16 @@ roo(char *buf, size_t maxlen)
  *		2. Fix offset in uio_kinit (lseek could actually change it !!!!)
  */
 int sys_read(volatile int fd, void *buf, size_t buflen, int *retval){
-    int err;
+    int err = 0;
     /*
      *
      * First, we would copy a dummy string to src to see wether the 
-     * user has access to that address or not
+     * user has access to that address or not ( This approach was apparently wrong!!)
+	 * We need to do some checking for write !!!
     */
     const char *dummy_buffer = "dummy\0";
-    err = copyoutstr(dummy_buffer, buf, sizeof(dummy_buffer)+2, (size_t *)retval);
+	(void) dummy_buffer;
+    // err = copyoutstr(dummy_buffer, buf, sizeof(dummy_buffer)+2, (size_t *)retval);
     
 
     if (fd == STDIN_FILENO){

@@ -33,9 +33,10 @@ int sys_exit(){
     /* If we have a parent (we are not init proc), send 
      *  a signal to parent's cv channel to wake it up
     */
-    if (curproc->parent != NULL){
+    if (curproc->parent != NULL && curproc->parent->waiting_for_pid == curproc -> pid){
         lock_acquire(curproc->parent->cv_lock);
-        cv_signal(curproc->parent->cv, curproc->parent->cv_lock);
+            curproc->parent->waiting_for_pid = 0x0;
+            cv_signal(curproc->parent->cv, curproc->parent->cv_lock);
         lock_release(curproc->parent->cv_lock);
     }
 
