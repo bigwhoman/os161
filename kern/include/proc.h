@@ -40,6 +40,7 @@
 #include <vnode.h>
 #include <synch.h>
 #include <bitmap.h>
+#include <array.h>
 
 struct addrspace;
 struct thread;
@@ -48,6 +49,7 @@ struct vnode;
 
 struct lock* pid_lock;
 struct bitmap* pid_bitmap;
+struct array* process_table;
 
 
 #define MAX_PID 2<<15
@@ -81,8 +83,8 @@ struct proc {
 
 	/* VFS */
 	struct vnode *p_cwd;		/* current working directory */
-
-	struct vnode *fd_table[MAX_FD];		/* file descriptor table */
+	
+	struct vnode *fd_table[MAX_FD];		/* file descriptor table - TODO : Change with array type*/
 
 	unsigned max_fd;
 

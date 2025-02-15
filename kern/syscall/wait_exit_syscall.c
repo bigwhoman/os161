@@ -1,6 +1,7 @@
 #include <syscall.h>
 #include <proc.h>
 #include <current.h>
+#include <kern/errno.h>
 /*
  *
  *
@@ -30,7 +31,8 @@ int sys_exit(){
      *      TODO : send the exited processes exit status to parent
      */
 
-    /* If we have a parent (we are not init proc), send 
+    /* If we have a parent (we are not init proc) 
+     *  which is waiting for us, send 
      *  a signal to parent's cv channel to wake it up
     */
     if (curproc->parent != NULL && curproc->parent->waiting_for_pid == curproc -> pid){
@@ -52,15 +54,37 @@ int sys_exit(){
  * If that process does not exist, waitpid fails.
  * 
  * We simply implement this function with the use of the 
- * synchronization primitive, conditional variables
- * when sys_wait is called a conditional vaiable is 
+ * synchronization primitive, conditional variable
+ *
 */
 
 int sys_wait(pid_t pid, int *status, int options, int *retval){
-    (void) pid;
     (void) status;
     (void) options;
-    (void) retval;
+    int err;
 
-    return 0;
+    err = 0;
+    lock_acquire(pid_lock);
+    struct proc *proc = array_get(process_table, (unsigned int)pid);
+    if (proc == NULL){
+        *retval = -1;
+        return ESRCH;
+    } 
+    if (proc -> parent != curproc) {
+        *retval = -1;
+        return ECHILD;
+    }
+    lock_release(pid_lock);
+
+    /* Now Do The Actual Waiting 
+     * We use a condvar to put the parent in a 
+     * sleeping state until the child wakes it up :)
+    */
+    lock_acquire(curproc->cv_lock);
+    curproc -> waiting_for_pid = pid;
+	while(curproc->waiting_for_pid > 0)
+		cv_wait(curproc->cv, curproc->cv_lock);
+	lock_release(curproc->cv_lock);
+
+    return err;
 }

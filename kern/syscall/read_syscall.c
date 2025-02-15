@@ -108,7 +108,8 @@ int sys_read(volatile int fd, void *buf, size_t buflen, int *retval){
     
 
     if (fd == STDIN_FILENO){
-        roo( buf, 2);
+		char b[64];
+        roo( b, 64);
     } else {
 		struct vnode *v;
 		/* TODO : Check Valid/inbounds fd */

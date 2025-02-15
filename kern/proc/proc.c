@@ -54,6 +54,8 @@
  */
 struct proc *kproc;
 
+static void proctable_add(struct proc *proc);
+
 /*
  * Create a proc structure.
  */
@@ -62,6 +64,10 @@ struct proc *
 proc_create(const char *name)
 {
 	struct proc *proc;
+
+	/* Dummy values - ignore them */
+	unsigned int rip;
+	rip = 1;
 
 	proc = kmalloc(sizeof(*proc));
 	if (proc == NULL) {
@@ -100,23 +106,44 @@ proc_create(const char *name)
 	
 	if (strcmp(name, "[kernel]") && proc != curproc){
 		lock_acquire(pid_lock);
-		bitmap_alloc(pid_bitmap, &proc->pid);
-		lock_release(pid_lock);
+        proctable_add(proc);
+        lock_release(pid_lock);
 	} else {
-		bitmap_mark(pid_bitmap, 0);
-		bitmap_mark(pid_bitmap, 1);
-		proc -> pid = 1;
-	}
-	
+		/* Process 0 is NULL - Init is the 1st process
+		 * Make sure pid is consistant with 
+		*/
 
+		bitmap_mark(pid_bitmap, 0);
+		array_add(process_table, 0x0, &rip);
+		proctable_add(proc);
+	}
 	return proc;
 }
+
+static void proctable_add(struct proc *proc)
+{
+    unsigned int rip;
+    rip = 0;
+    bitmap_alloc(pid_bitmap, &proc->pid);
+    if (proc->pid >= array_num(process_table))
+    {
+        array_add(process_table, proc, &rip);
+        KASSERT(proc->pid == rip);
+    }
+    else
+    {
+        array_set(process_table, proc->pid, proc);
+    }
+}
+
+/* TODO : Refactor the whole process adding to table functionality*/
+// proc_add_to_table(){
+
+// }
 
 /*
  * Destroy a proc structure.
  *
- * Note: nothing currently calls this. Your wait/exit code will
- * probably want to do so.
  */
 void
 proc_destroy(struct proc *proc)
@@ -223,6 +250,8 @@ proc_bootstrap(void)
 {
 	pid_lock = lock_create("Pid Lock");
 	pid_bitmap = bitmap_create(16);
+	/* TODO : Clean this before last process shutdown */
+	process_table = array_create();
 	kproc = proc_create("[kernel]");
 	if (kproc == NULL) {
 		panic("proc_create for kproc failed\n");
