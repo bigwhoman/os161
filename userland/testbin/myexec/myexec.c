@@ -49,11 +49,11 @@
 
 
 int
-main(void)
+main(int argc, char *argv[])
 {
-
+	(void) argc;
 	warnx("Starting argtest ....\n");
-	execv("/testbin/argtest", (char **)args);
+	execv("/testbin/argtest", (char **)argv);
 
 	warnx("We shouldn't see this !!!!\n");
 	return 0;

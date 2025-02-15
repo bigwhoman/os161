@@ -20,6 +20,8 @@
  *  and then performs the actual exit by calling _exit.
  * Note : For now we do not take wait into consideration and think that 
  * we only destroy the process
+ * 
+ * TODO : Send status of child
  */
 int sys_exit(){
     /*
@@ -56,6 +58,7 @@ int sys_exit(){
  * We simply implement this function with the use of the 
  * synchronization primitive, conditional variable
  *
+ * TODO : Get status of child
 */
 
 int sys_wait(pid_t pid, int *status, int options, int *retval){
