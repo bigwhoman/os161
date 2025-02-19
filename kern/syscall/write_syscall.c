@@ -95,7 +95,7 @@ ssize_t sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
 	 *	This is probably not the right approach as dup2 could bind 
 	 *	the standard output to sth else (Need to change this)
 	 */
-    if(fd == STDOUT_FILENO || fd == STDERR_FILENO){
+    if(fd == curproc -> stdout || fd == curproc -> stderr){
         console_send(NULL, kern_buff, buflen);
 		*retval = buflen;
     } else {

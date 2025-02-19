@@ -107,7 +107,7 @@ int sys_read(volatile int fd, void *buf, size_t buflen, int *retval){
     // err = copyoutstr(dummy_buffer, buf, sizeof(dummy_buffer)+2, (size_t *)retval);
     
 
-    if (fd == STDIN_FILENO){
+    if (fd == curproc -> stdin){
 		char b[64];
         roo( b, 64);
     } else {

@@ -48,6 +48,7 @@
 #include <current.h>
 #include <addrspace.h>
 #include <vnode.h>
+#include <kern/unistd.h>
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -89,6 +90,10 @@ proc_create(const char *name)
 	proc->p_cwd = NULL;
 
 	proc->max_fd = MAX_FD;
+
+	proc->stdin = STDIN_FILENO;
+	proc->stdout = STDOUT_FILENO;
+	proc->stderr = STDERR_FILENO;
 
 	/* Setup its Parent 
 		If a proc is its own parent just set the parent to NULL

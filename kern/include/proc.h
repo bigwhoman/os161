@@ -84,7 +84,16 @@ struct proc {
 	/* VFS */
 	struct vnode *p_cwd;		/* current working directory */
 	
-	struct vnode *fd_table[MAX_FD];		/* file descriptor table - TODO : Change with array type*/
+	struct vnode *fd_table[MAX_FD];		/* file descriptor table - 
+										 * TODO : Change with array type
+										 * TODO 2 : add a locking system
+										*/
+
+	int stdin;	/* stdin fd */
+
+	int stdout; /* stdout fd */
+
+	int stderr; /* stderr fd */
 
 	unsigned max_fd;
 

@@ -8,13 +8,8 @@
 #include <addrspace.h>
 #include <types.h>
 #include <kern/errno.h>
-#include <lib.h>
 #include <uio.h>
-#include <proc.h>
 #include <current.h>
-#include <addrspace.h>
-#include <vnode.h>
-#include <elf.h>
 #include <copyinout.h>
 
 /* execv replaces the currently executing program with
@@ -52,18 +47,11 @@ int sys_execv(const char *program, char *argv[], int *retval){
     
 	all = 0;
 	
-	// char **kernel_args;
-	// kernel_args = kmalloc(sizeof(char **));
 	/* Copy the arguments from old stack */
 	for (i = 0; i < (size_t)argc; i++)
 	{
-		// kernel_args[i] = kmalloc(strlen(argv[i]) + 1);
 		all += strlen(argv[i]) + 1;
-		/* Should we do this or copyinstr ????? */
-		// strcpy(kernel_args[i], argv[i]);
 	}
-
-	// kprintf("shizeof %d \n", sizeof(kernel_args));
 	
 	
 	result = open_copy_prog(prog, &as, &entrypoint);
@@ -87,15 +75,20 @@ int sys_execv(const char *program, char *argv[], int *retval){
 	
 
 	/* Put arguments onto the stack */
-	char* foo;
+	char* foo; /* this is the variable to move things between old and new address space */
 	vaddr_t strloc = (vaddr_t)(stackptr - all);
+
+	/* actuall strings starting location */
 	strloc &= 0xfffffffc;
+
+	/* argv pointer location */
 	vaddr_t argptr = strloc - (argc + 1) * sizeof(char *);
 	*((vaddr_t *)argptr + argc) = 0;
 	for (i = 0; i < (size_t)argc; i++)
 	{
 
 		/* Move arguments from old stack to new one */
+		/* TODO : copy address space instead of this (do it after fixing virtual memory)*/
 		proc_setas(old_as);
 		as_activate();
 
