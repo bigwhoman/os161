@@ -46,13 +46,12 @@
 #include <test.h>
 #include <copyinout.h>
 
-// int open_copy_prog(char *progname, struct addrspace **as, vaddr_t *entrypoint);
 
+/* Open our program and load it into memory */
 int open_copy_prog(char *progname, struct addrspace **as, vaddr_t *entrypoint){
-	// kprintf("open and copy program : %s\n",progname);
+
 	struct vnode *v;
 	int result;
-	// size_t i;
 	/* Open the file. */
 	result = vfs_open(progname, O_RDONLY, 0, &v);
 	if (result) {
@@ -74,10 +73,7 @@ int open_copy_prog(char *progname, struct addrspace **as, vaddr_t *entrypoint){
 	as_activate();
 
 
-	// int X[20];
 
-
-	// kprintf("------------------\n");
 	/* Load the executable. */
 	result = load_elf(v, entrypoint);
 	if (result) {
@@ -85,14 +81,6 @@ int open_copy_prog(char *progname, struct addrspace **as, vaddr_t *entrypoint){
 		vfs_close(v);
 		return result;
 	}
-	
-	// kprintf("entry point is : %x ----- \n", *entrypoint);
-	// memcpy(X, (void *)(*entrypoint), sizeof(X));
-    
-	// for ( i = 0; i < 4; i++)
-	// {
-	// 	kprintf("X : %x\n", X[i]);
-	// }	
 	
 
 	/* Done with the file now. */
@@ -140,8 +128,10 @@ runprogram(char *progname, int argc, char *argv[])
 
 	vaddr_t strloc = (vaddr_t)(stackptr - all);
 	strloc &= 0xfffffffc;
-	vaddr_t argptr = strloc - argc * sizeof(char *); 
 
+	/* Point to arguments (Last argument is always NULL)*/
+	vaddr_t argptr = strloc - (argc + 1) * sizeof(char *); 
+	*((vaddr_t *)argptr + argc) = 0;
 	for (i = 0; i < (size_t)argc; i++)
 	{
 		*((vaddr_t *)argptr + i) = strloc;

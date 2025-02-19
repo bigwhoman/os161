@@ -17,8 +17,12 @@
 #include <elf.h>
 #include <copyinout.h>
 
-
-/* TODO : Handle Errors */
+/* execv replaces the currently executing program with
+ * a newly loaded program image.
+ * This occurs within one process; the process id is unchanged.
+ *
+ *
+ * TODO : Handle Errors */
 int sys_execv(const char *program, char *argv[], int *retval){
 	struct addrspace *as;
     vaddr_t stackptr, entrypoint;
@@ -27,13 +31,21 @@ int sys_execv(const char *program, char *argv[], int *retval){
     size_t i, all;
     char prog[64];
 	as = NULL;
+	argc = 0;
+	for (size_t i = 0; ; i++)
+	{
+		if(*(argv + i) == NULL)
+			break;
+		argc++;
+	}
 	
+
 	/* TODO : Check for valid program name !!! */
 	copyinstr((const_userptr_t)program, prog, 63,(size_t *)retval);
 
 	/* We might need to change this in the future!!! */
 	/* TODO : Draw the structure of the program */
-    argc = ((int)((vaddr_t) (*argv) - (vaddr_t)(argv)))/sizeof(char *);
+	
     
 	all = 0;
 	
@@ -66,8 +78,8 @@ int sys_execv(const char *program, char *argv[], int *retval){
 	/* Put arguments onto the stack */
 	vaddr_t strloc = (vaddr_t)(stackptr - all);
 	strloc &= 0xfffffffc;
-	vaddr_t argptr = strloc - argc * sizeof(char *); 
-
+	vaddr_t argptr = strloc - (argc + 1) * sizeof(char *);
+	*((vaddr_t *)argptr + argc) = 0;
 	for (i = 0; i < (size_t)argc; i++)
 	{
 		*((vaddr_t *)argptr + i) = strloc;
