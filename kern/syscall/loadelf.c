@@ -162,16 +162,13 @@ load_segment(struct addrspace *as, struct vnode *v,
  * Returns the entry point (initial PC) for the program in ENTRYPOINT.
  */
 int
-load_elf(struct vnode *v, vaddr_t *entrypoint)
+load_elf(struct vnode *v, vaddr_t *entrypoint, struct addrspace *as)
 {
 	Elf_Ehdr eh;   /* Executable header */
 	Elf_Phdr ph;   /* "Program header" = segment header */
 	int result, i;
 	struct iovec iov;
 	struct uio ku;
-	struct addrspace *as;
-
-	as = proc_getas();
 
 	/*
 	 * Read the executable header from offset 0 in the file.

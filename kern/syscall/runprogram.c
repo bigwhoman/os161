@@ -49,7 +49,6 @@
 
 /* Open our program and load it into memory */
 int open_copy_prog(char *progname, struct addrspace **as, vaddr_t *entrypoint){
-
 	struct vnode *v;
 	int result;
 	/* Open the file. */
@@ -57,6 +56,10 @@ int open_copy_prog(char *progname, struct addrspace **as, vaddr_t *entrypoint){
 	if (result) {
 		return result;
 	}
+
+
+	curproc -> p_addrspace = NULL;
+	*as = NULL;
 
 	/* We should be a new process. */
 	KASSERT(proc_getas() == NULL);
@@ -75,7 +78,7 @@ int open_copy_prog(char *progname, struct addrspace **as, vaddr_t *entrypoint){
 
 
 	/* Load the executable. */
-	result = load_elf(v, entrypoint);
+	result = load_elf(v, entrypoint, *as);
 	if (result) {
 		/* p_addrspace will go away when curproc is destroyed */
 		vfs_close(v);
@@ -85,6 +88,9 @@ int open_copy_prog(char *progname, struct addrspace **as, vaddr_t *entrypoint){
 
 	/* Done with the file now. */
 	vfs_close(v);
+
+	/* Now that everything is done destroy the old address space */
+
 	return 0;
 }
 
@@ -143,7 +149,7 @@ runprogram(char *progname, int argc, char *argv[])
 
 
 	/* Warp to user mode. */
-	enter_new_process(argc-1 /*argc*/, (void *)argptr /*userspace addr of argv*/,
+	enter_new_process(argc /*argc*/, (void *)argptr /*userspace addr of argv*/,
 			  NULL /*userspace addr of environment*/,
 			  argptr , entrypoint);
 

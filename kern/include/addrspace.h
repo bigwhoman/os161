@@ -126,7 +126,7 @@ int               as_define_stack(struct addrspace *as, vaddr_t *initstackptr);
  *               in the space pointed to by ENTRYPOINT.
  */
 
-int load_elf(struct vnode *v, vaddr_t *entrypoint);
+int load_elf(struct vnode *v, vaddr_t *entrypoint, struct addrspace *as);
 
 
 #endif /* _ADDRSPACE_H_ */
