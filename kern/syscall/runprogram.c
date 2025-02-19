@@ -46,30 +46,13 @@
 #include <test.h>
 #include <copyinout.h>
 
-/*
- * Load program "progname" and start running it in usermode.
- * Does not return except on error.
- *
- * Calls vfs_open on progname and thus may destroy it.
- * 
- * 
- * 
- * Q : What about program input arguments ?? :)
- */
-int
-runprogram(char *progname, int argc, char *argv[])
-{
-	struct addrspace *as;
+// int open_copy_prog(char *progname, struct addrspace **as, vaddr_t *entrypoint);
+
+int open_copy_prog(char *progname, struct addrspace **as, vaddr_t *entrypoint){
+	// kprintf("open and copy program : %s\n",progname);
 	struct vnode *v;
-	vaddr_t entrypoint, stackptr;
 	int result;
-	size_t i, all;
-	all = 0;
-	for (i = 0; i < (size_t)argc; i++)
-	{
-		all += strlen(argv[i]) + 1;
-	}
-	
+	// size_t i;
 	/* Open the file. */
 	result = vfs_open(progname, O_RDONLY, 0, &v);
 	if (result) {
@@ -80,26 +63,71 @@ runprogram(char *progname, int argc, char *argv[])
 	KASSERT(proc_getas() == NULL);
 
 	/* Create a new address space. */
-	as = as_create();
-	if (as == NULL) {
+	*as = as_create();
+	if (*as == NULL) {
 		vfs_close(v);
 		return ENOMEM;
 	}
 
 	/* Switch to it and activate it. */
-	proc_setas(as);
+	proc_setas(*as);
 	as_activate();
 
+
+	// int X[20];
+
+
+	// kprintf("------------------\n");
 	/* Load the executable. */
-	result = load_elf(v, &entrypoint);
+	result = load_elf(v, entrypoint);
 	if (result) {
 		/* p_addrspace will go away when curproc is destroyed */
 		vfs_close(v);
 		return result;
 	}
+	
+	// kprintf("entry point is : %x ----- \n", *entrypoint);
+	// memcpy(X, (void *)(*entrypoint), sizeof(X));
+    
+	// for ( i = 0; i < 4; i++)
+	// {
+	// 	kprintf("X : %x\n", X[i]);
+	// }	
+	
 
 	/* Done with the file now. */
 	vfs_close(v);
+	return 0;
+}
+
+/*
+ * Load program "progname" and start running it in usermode.
+ * Does not return except on error.
+ *
+ * Calls vfs_open on progname and thus may destroy it.
+ * 
+ * 
+ * 
+ */
+int
+runprogram(char *progname, int argc, char *argv[])
+{
+	struct addrspace *as;
+	vaddr_t entrypoint, stackptr;
+	int result;
+	size_t i, all;
+	all = 0;
+	as = NULL;
+	for (i = 0; i < (size_t)argc; i++)
+	{
+		all += strlen(argv[i]) + 1;
+	}
+	
+	
+	result = open_copy_prog(progname, &as, &entrypoint);
+	if (result)
+		return result;
+	
 
 	/* Define the user stack in the address space */
 	result = as_define_stack(as, &stackptr);
@@ -120,6 +148,8 @@ runprogram(char *progname, int argc, char *argv[])
 		strcpy((char *)strloc, argv[i]);
 		strloc += strlen(argv[i]) + 1;
 	}
+
+
 
 
 	/* Warp to user mode. */

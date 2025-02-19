@@ -51,10 +51,8 @@
 int
 main(int argc, char *argv[])
 {
-	(void) argc;
-	warnx("Starting argtest ....\n");
-	execv("/testbin/argtest", (char **)argv);
-
+	warnx("Starting argtest with : %d %p -- \n", argc, argv);
+	execv("/testbin/argtest", argv);
 	warnx("We shouldn't see this !!!!\n");
 	return 0;
 }
