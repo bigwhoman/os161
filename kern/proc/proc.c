@@ -117,7 +117,7 @@ proc_create(const char *name)
 		/* Process 0 is NULL - Init is the 1st process
 		 * Make sure pid is consistant with 
 		*/
-
+		
 		bitmap_mark(pid_bitmap, 0);
 		array_add(process_table, 0x0, &rip);
 		proctable_add(proc);
@@ -132,6 +132,7 @@ static void proctable_add(struct proc *proc)
     bitmap_alloc(pid_bitmap, &proc->pid);
     if (proc->pid >= array_num(process_table))
     {
+		kprintf("pid : %d %d\n", proc->pid, rip);
         array_add(process_table, proc, &rip);
         KASSERT(proc->pid == rip);
     }
@@ -237,8 +238,8 @@ proc_destroy(struct proc *proc)
 	/* Free the file-descriptor table 
 		** Hoping things dont blow up by this :)
 	*/
-	kfree(proc->fd_table);
-	kfree(proc->p_name);
+	if(proc->p_name != NULL)
+		kfree(proc->p_name);
 
 	proc->parent = NULL;
 	cv_destroy(proc->cv);
@@ -353,7 +354,10 @@ proc_remthread(struct thread *t)
 	proc->p_numthreads--;
 	spinlock_release(&proc->p_lock);
 
+
 	spl = splhigh();
+	if (t -> t_proc -> p_numthreads == 0)
+		proc_destroy(t -> t_proc);
 	t->t_proc = NULL;
 	splx(spl);
 }

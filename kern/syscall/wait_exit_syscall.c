@@ -45,7 +45,7 @@ int sys_exit(){
     }
 
     thread_exit();
-    proc_destroy(curproc);
+    /* We would not get here */
     return 0;
 }
 
