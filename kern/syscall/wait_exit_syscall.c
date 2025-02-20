@@ -2,6 +2,7 @@
 #include <proc.h>
 #include <current.h>
 #include <kern/errno.h>
+#include <wait.h>
 /*
  *
  *
@@ -79,12 +80,18 @@ int sys_wait(pid_t pid, int *status, int options, int *retval){
     }
     lock_release(pid_lock);
 
+    if (options == WNOHANG){
+        *retval  = 0;
+        return err;
+    }
+
     /* Now Do The Actual Waiting 
      * We use a condvar to put the parent in a 
      * sleeping state until the child wakes it up :)
     */
     lock_acquire(curproc->cv_lock);
     curproc -> waiting_for_pid = pid;
+    *retval = pid;
 	while(curproc->waiting_for_pid > 0)
 		cv_wait(curproc->cv, curproc->cv_lock);
 	lock_release(curproc->cv_lock);

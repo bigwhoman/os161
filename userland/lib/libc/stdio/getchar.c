@@ -40,7 +40,7 @@ getchar(void)
 {
 	char ch;
 	int len;
-
+	// printf("googoo : %p\n", &ch);
 	len = read(STDIN_FILENO, &ch, 1);
 	if (len<=0) {
 		/* end of file or error */

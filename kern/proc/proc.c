@@ -130,9 +130,11 @@ static void proctable_add(struct proc *proc)
     unsigned int rip;
     rip = 0;
     bitmap_alloc(pid_bitmap, &proc->pid);
+	/* TODO : I think this if statement has a problem 
+	 * For some reason sometimes deadbeef ocurrs if I insert command too fast
+	 */
     if (proc->pid >= array_num(process_table))
     {
-		kprintf("pid : %d %d\n", proc->pid, rip);
         array_add(process_table, proc, &rip);
         KASSERT(proc->pid == rip);
     }

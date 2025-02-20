@@ -36,10 +36,8 @@ void write_bootstrap(){
  */
 ssize_t sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
     int err;
-    char kern_buff[buflen+1];
-
-    kern_buff[buflen] = '\0';
-    err = copyin(buf, kern_buff, buflen+1);
+    char kern_buff[buflen];
+    err = copyin(buf, kern_buff, buflen);
 	
     if(err){
         *retval = -1;
