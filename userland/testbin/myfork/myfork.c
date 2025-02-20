@@ -27,53 +27,34 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _SYSCALL_H_
-#define _SYSCALL_H_
-
-
-#include <cdefs.h> /* for __DEAD */
-#include <types.h>
-#include <addrspace.h>
-struct trapframe; /* from <machine/trapframe.h> */
-
 /*
- * The system call dispatcher.
+ * kitchen.c
+ *
+ * 	Run a bunch of sinks (only).
+ *
+ * This tests concurrent read access to the console driver.
  */
 
-void syscall(struct trapframe *tf);
-
-/*
- * Support functions.
- */
-
-/* Helper for fork(). You write this. */
-void enter_forked_process(void* tf, long unsigned int a);
-
-/* Enter user mode. Does not return. */
-__DEAD void enter_new_process(int argc, userptr_t argv, userptr_t env,
-		       vaddr_t stackptr, vaddr_t entrypoint);
-
-int open_copy_prog(char *progname, struct addrspace **as, vaddr_t *entrypoint);
+#include <stdarg.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <limits.h>
+#include <assert.h>
+#include <err.h>
+#include <test161/test161.h>
 
 
-/*
- * Prototypes for IN-KERNEL entry points for system call implementations.
- */
-
-int sys_reboot(int code);
-int sys___time(userptr_t user_seconds, userptr_t user_nanoseconds);
-
-int sys_write(int fd, const void *buf, size_t buflen, int *retval);
-int sys_read(int fd, void *buf, size_t buflen, int *retval);
-int sys_open(char *filename, int flags, mode_t mode, int *retval);
-int sys_exit(void);
-int sys_execv(const char *program, char **args, int *retval);
-int sys_wait(pid_t pid, int *status, int options, int *retval);
-int sys_close(pid_t pid, int *retval);
-int sys_getpid(void);
-int sys_fork(struct trapframe *tf, int *retval);
-
-/* Bootstrap Functions */
-void write_bootstrap(void);
-
-#endif /* _SYSCALL_H_ */
+int
+main(int argc, char *argv[])
+{
+	(void) argv;
+	(void) argc;
+	warnx("starting the fork\n");
+	int res;
+	fork();
+	res = fork();
+	printf("miow from %d\n",res);
+	return 0;
+}

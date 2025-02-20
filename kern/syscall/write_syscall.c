@@ -7,14 +7,9 @@
 #include <proc.h>
 #include <uio.h>
 #include <current.h>
+#include <synch.h>
 
-int
-printf(const char *fmt, ...);
-
-static
-inline
-int
-__printf(const char *fmt, va_list ap);
+struct lock *console_lock;
 
 static
 void
@@ -29,50 +24,9 @@ console_send(void *junk, const char *data, size_t len)
 	}
 }
 
-
-static
-inline
-int
-__printf(const char *fmt, va_list ap)
-{
-	int chars;
-	// bool dolock;
-
-	// dolock = kprintf_lock != NULL
-	// 	&& curthread->t_in_interrupt == false
-	// 	&& curthread->t_curspl == 0
-	// 	&& curcpu->c_spinlocks == 0;
-
-	// if (dolock) {
-	// 	lock_acquire(kprintf_lock);
-	// }
-	// else {
-	// 	spinlock_acquire(&kprintf_spinlock);
-	// }
-
-	chars = __vprintf(console_send, NULL, fmt, ap);
-
-	// if (dolock) {
-	// 	lock_release(kprintf_lock);
-	// }
-	// else {
-	// 	spinlock_release(&kprintf_spinlock);
-	// }
-
-	return chars;
-}
-
-int
-printf(const char *fmt, ...)
-{
-	int chars;
-	va_list ap;
-
-	va_start(ap, fmt);
-	chars = __printf(fmt, ap);
-	va_end(ap);
-
-	return chars;
+/* Bootstrap for write syscall */
+void write_bootstrap(){
+	console_lock = lock_create("Console Lock");
 }
 
 /*
@@ -91,13 +45,17 @@ ssize_t sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
         *retval = -1;
         return err;
     }
+
+
 	/*
 	 *	This is probably not the right approach as dup2 could bind 
 	 *	the standard output to sth else (Need to change this)
 	 */
     if(fd == curproc -> stdout || fd == curproc -> stderr){
+		lock_acquire(console_lock);
         console_send(NULL, kern_buff, buflen);
 		*retval = buflen;
+		lock_release(console_lock);
     } else {
         struct vnode *v;
 		/* TODO : Check Valid/inbounds fd */

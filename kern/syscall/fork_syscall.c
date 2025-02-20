@@ -3,6 +3,7 @@
 #include <current.h>
 #include <addrspace.h>
 #include <kern/errno.h>
+#include <mips/trapframe.h>
 
 /* fork duplicates the currently running process. 
  * The two copies are identical, except that one (
@@ -11,6 +12,8 @@
  */
 int sys_fork(struct trapframe *tf, int *retval){
     struct proc *newproc;
+    // struct addrspace *new_as;
+    // vaddr_t stackptr;
     int result;
 	newproc = proc_create_runprogram(curproc -> p_name /* name */);
 	if (newproc == NULL) {
@@ -20,9 +23,9 @@ int sys_fork(struct trapframe *tf, int *retval){
 	
 
     struct trapframe *new_tf;
-    new_tf = kmalloc(sizeof(struct trapframe*));
+    new_tf = kmalloc(sizeof(*tf));
 
-    memcpy(&new_tf, &tf, sizeof(tf));
+    memcpy(new_tf, tf, sizeof(*tf));
 
     newproc -> parent = curproc;
 
@@ -37,10 +40,12 @@ int sys_fork(struct trapframe *tf, int *retval){
     newproc -> stdout = curproc -> stdout;
     newproc -> stderr = curproc -> stderr;
 
+    // as_define_stack(newproc->p_addrspace, &stackptr);
+
     /* VM fields */
     as_copy(curproc -> p_addrspace, &newproc->p_addrspace);
     
-
+    
 
     result = thread_fork(curproc -> p_name/* thread name */,
 			newproc /* new process */,
@@ -52,8 +57,8 @@ int sys_fork(struct trapframe *tf, int *retval){
         *retval = -1;
 		return result;
 	}
-
-    return newproc -> pid;
+    *retval = newproc -> pid;
+    return 0;
 }
 
 /* getpid returns the process id of the current process. */
