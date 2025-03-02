@@ -2,7 +2,7 @@
 #include <proc.h>
 #include <current.h>
 #include <kern/errno.h>
-#include <wait.h>
+#include <kern/wait.h>
 /*
  *
  *
@@ -24,7 +24,7 @@
  * 
  * TODO : Send status of child
  */
-int sys_exit(){
+int sys_exit(int status){
     /*
      * For now we take the easy way out :
      * 1. We consider that we only have 1 thread 
@@ -41,6 +41,8 @@ int sys_exit(){
     if (curproc->parent != NULL && curproc->parent->waiting_for_pid == curproc -> pid){
         lock_acquire(curproc->parent->cv_lock);
             curproc->parent->waiting_for_pid = 0x0;
+            curproc->parent->last_waited_child = curproc->pid;
+            curproc->parent->child_status = status;
             cv_signal(curproc->parent->cv, curproc->parent->cv_lock);
         lock_release(curproc->parent->cv_lock);
     }
@@ -63,8 +65,6 @@ int sys_exit(){
 */
 
 int sys_wait(pid_t pid, int *status, int options, int *retval){
-    (void) status;
-    (void) options;
     int err;
 
     err = 0;
@@ -94,6 +94,27 @@ int sys_wait(pid_t pid, int *status, int options, int *retval){
     *retval = pid;
 	while(curproc->waiting_for_pid > 0)
 		cv_wait(curproc->cv, curproc->cv_lock);
+    *retval = curproc->last_waited_child;
+    if (status != NULL){
+        int encode = 0;
+        switch(curproc->child_status){
+            case __WEXITED :
+                encode = _MKWAIT_EXIT(curproc->child_status);
+                break;
+            case __WCORED :
+                encode = _MKWAIT_CORE(curproc->child_status);
+                break;
+            case __WSIGNALED :
+                encode = _MKWAIT_SIG(curproc->child_status);
+                break;
+            case __WSTOPPED :
+                encode = _MKWAIT_STOP(curproc->child_status);
+                break;
+            default :
+                panic("wtf");
+        }
+        *status = encode;
+    }
 	lock_release(curproc->cv_lock);
 
     return err;

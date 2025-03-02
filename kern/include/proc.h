@@ -103,7 +103,10 @@ struct proc {
 	/* condvar and its lock for wait */
 	struct cv *cv;
 	struct lock *cv_lock;
+	/* child it is waiting for and its status */
 	unsigned int waiting_for_pid;
+	unsigned int last_waited_child;
+	int child_status;
 
 
 	/* add more material here as needed */
