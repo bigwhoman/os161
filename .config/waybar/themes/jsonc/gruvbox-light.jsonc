@@ -214,8 +214,8 @@
   },
 
   "custom/distro": {
-    "format": " ",
-    "tooltip": false
+	"format": "❄ ",
+	"tooltip": false
   },
 
   "idle_inhibitor": {
