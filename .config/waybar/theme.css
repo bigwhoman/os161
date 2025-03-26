@@ -1,31 +1,31 @@
-/* Catppuccin Mocha */
+/* Gruvbox Light */
 
-@define-color rosewater       #f5e0dc;
-@define-color flamingo        #f2cdcd;
-@define-color pink            #f5c2e7;
-@define-color mauve           #cba6f7;
-@define-color red             #f38ba8;
-@define-color maroon          #eba0ac;
-@define-color peach           #fab387;
-@define-color yellow          #f9e2af;
-@define-color green           #a6e3a1;
-@define-color teal            #94e2d5;
-@define-color sky             #89dceb;
-@define-color sapphire        #74c7ec;
-@define-color blue            #89b4fa;
-@define-color lavender        #b4befe;
-@define-color text            #cdd6f4;
-@define-color subtext1        #bac2de;
-@define-color subtext0        #a6adc8;
-@define-color overlay2        #9399b2;
-@define-color overlay1        #7f849c;
-@define-color overlay0        #6c7086;
-@define-color surface2        #585b70;
-@define-color surface1        #45475a;
-@define-color surface0        #313244;
-@define-color base            #1e1e2e;
-@define-color mantle          #181825;
-@define-color crust           #11111b;
+@define-color bg0_h           #f9f5d7;
+@define-color bg0             #fbf1c7;
+@define-color bg1             #ebdbb2;
+@define-color bg2             #d5c4a1;
+@define-color bg3             #bdae93;
+@define-color bg4             #a89984;
+@define-color gray            #928374;
+@define-color fg4             #7c6f64;
+@define-color fg3             #665c54;
+@define-color fg2             #504945;
+@define-color fg1             #3c3836;
+@define-color fg0             #282828;
+@define-color red             #cc241d;
+@define-color bright_red      #9d0006;
+@define-color green           #98971a;
+@define-color bright_green    #79740e;
+@define-color yellow          #d79921;
+@define-color bright_yellow   #b57614;
+@define-color blue            #458588;
+@define-color bright_blue     #076678;
+@define-color purple          #b16286;
+@define-color bright_purple   #8f3f71;
+@define-color aqua            #689d6a;
+@define-color bright_aqua     #427b58;
+@define-color orange          #d65d0e;
+@define-color bright_orange   #af3a03;
 
 @define-color white           #ffffff;
 @define-color black           #000000;
@@ -38,38 +38,38 @@
 
 /* Main Colors */
 
-@define-color shadow          shade(@crust, 0.5);
-@define-color main-fg         @text;
-@define-color main-bg         @crust;
-@define-color main-br         @text;
+@define-color shadow          shade(@bg0_h, 0.5);
+@define-color main-fg         @fg0;
+@define-color main-bg         @bg0_h;
+@define-color main-br         @fg0;
 
-@define-color active-bg       @overlay2;
-@define-color active-fg       @crust;
+@define-color active-bg       @yellow;
+@define-color active-fg       @bg0_h;
 
-@define-color hover-bg        @surface0;
-@define-color hover-fg        alpha(@text, 0.75);
+@define-color hover-bg        @bg2;
+@define-color hover-fg        alpha(@fg0, 0.75);
 
 /* Module Colors */
 
-@define-color module-fg       @text;
-@define-color workspaces      @mantle;
+@define-color module-fg       @fg0;
+@define-color workspaces      @bg0;
 
-@define-color cpuinfo         @mantle;
-@define-color memory          @base;
-@define-color cpu             @surface0;
+@define-color cpuinfo         @bg0;
+@define-color memory          @bg1;
+@define-color cpu             @bg2;
 @define-color distro-fg       @black;
-@define-color distro-bg       @overlay2;
-@define-color time            @surface0;
-@define-color date            @base;
-@define-color tray            @mantle;
+@define-color distro-bg       @yellow;
+@define-color time            @bg2;
+@define-color date            @bg1;
+@define-color tray            @bg0;
 
-@define-color pulseaudio      @mantle;
-@define-color backlight       @base;
-@define-color battery         @surface0;
-@define-color power           @overlay2;
+@define-color pulseaudio      @bg0;
+@define-color backlight       @bg1;
+@define-color battery         @bg2;
+@define-color power           @yellow;
 
 /* State Colors */
 
-@define-color warning         @yellow;
-@define-color critical        @red;
-@define-color charging        @text;
+@define-color warning         @bright_orange;
+@define-color critical        @bright_red;
+@define-color charging        @fg0;
