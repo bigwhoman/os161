@@ -23,6 +23,10 @@ vim.g.maplocalleader = "\\"
 
 -- Setup lazy.nvim
 require("lazy").setup({
+
+  change_detection = {
+      notify = false,
+  },
   spec = {
     -- import your plugins
     { import = "plugins" },
@@ -31,5 +35,8 @@ require("lazy").setup({
   -- colorscheme that will be used when installing plugins.
   install = { colorscheme = { "hubamax", "monokai" } },
   -- automatically check for plugin updates
-  checker = { enabled = true },
+  checker = { enabled = true,
+              notify=false,           
+  },
 })
+
