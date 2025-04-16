@@ -1,0 +1,11 @@
+{
+    "files.autoSave": "afterDelay",
+    "arduino.useArduinoCli": true,
+    "arduino.enableUSBDetection": true
+    "vim.insertModeKeyBindings": [
+      {
+        "before": ["j", "k"],
+        "after": ["<Esc>"]
+      }
+    ]
+}
