@@ -40,6 +40,15 @@
       "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
       "format-alt": "{:%Y-%m-%d}"
     },
+      "hyprland/language": {
+
+  "format": "{}",
+
+  "format-us": "US",
+
+  "format-fa": "FA",
+
+  },
     "cpu": {
       "format": "  {usage}%",
       "tooltip": false
