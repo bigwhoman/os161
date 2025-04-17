@@ -257,7 +257,7 @@ void
 proc_bootstrap(void)
 {
 	pid_lock = lock_create("Pid Lock");
-	pid_bitmap = bitmap_create(16);
+	pid_bitmap = bitmap_create(MAX_PID);
 	/* TODO : Clean this before last process shutdown */
 	process_table = array_create();
 	kproc = proc_create("[kernel]");

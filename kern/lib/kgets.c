@@ -30,7 +30,9 @@
 
 #include <types.h>
 #include <lib.h>
-
+#define HISTORY_SIZE  20
+char* history[HISTORY_SIZE];
+int i;	
 /*
  * Do a backspace in typed input.
  * We overwrite the current character with a space in case we're on
@@ -103,11 +105,22 @@ kgets(char *buf, size_t maxlen)
 				backsp();
 				pos--;
 			}
-		}
+		} 
+		// else if (ch==27){
+		// 	i--;
+		// 	kprintf(history[i]);
+		// 	strcpy(buf, history[i]);	
+		// 	pos = strlen(buf)+1;
+		// }
 		else {
 			beep();
 		}
 	}
-
-	buf[pos] = 0;
+	/*TODO: This causes a problem with paging.*/
+	// buf[pos] = 0;
+	// history[i] = (char *)kmalloc(sizeof(buf));
+	// strcpy(history[i], buf);
+	// i++;
+	// if (i >= HISTORY_SIZE)
+	// 	i = 0;
 }
