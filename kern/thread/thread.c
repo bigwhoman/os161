@@ -287,6 +287,7 @@ thread_destroy(struct thread *thread)
 	thread->t_wchan_name = "DESTROYED";
 
 	kfree(thread);
+	thread = NULL;
 }
 
 /*

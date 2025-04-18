@@ -44,6 +44,8 @@ int sys_open(char *filename, int flags, mode_t mode, int *retval){
  *  open, dup2, pipe, or similar calls. 
  */
 int sys_close(int fd, int *retval){
+    *retval = 0;
+
     if (fd == curproc -> stdin){
         curproc -> stdin = -1;
         curproc -> fd_table[fd] = NULL;

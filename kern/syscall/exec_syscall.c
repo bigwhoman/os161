@@ -102,6 +102,7 @@ int sys_execv(const char *program, char *argv[], int *retval){
 		strcpy((char *)strloc, foo);
 		strloc += strlen(foo) + 1;
 		kfree(foo);
+		foo = NULL;
 	}
 
 	/* Destroy old address space after migration is done */

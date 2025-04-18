@@ -46,7 +46,23 @@ int sys_exit(int status){
             cv_signal(curproc->parent->cv, curproc->parent->cv_lock);
             lock_release(curproc->parent->cv_lock);
     }
-
+    /* Close all file descriptors
+	 *	
+	 */
+	int close_ret;
+    int close_err;
+    close_ret = 0;
+	for (size_t i = 0; i < MAX_FD; i++)
+	{
+        if (curproc->fd_table[i] != NULL)
+        {
+            close_err = sys_close(i, &close_ret);
+            if (close_err)
+            {
+                kprintf("Error in closing fd number : %d\n", i);
+            }
+        }
+    }
     // kprintf("%d Exited \n", curproc->pid);
     thread_exit();
     /* We would not get here */

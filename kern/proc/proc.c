@@ -68,6 +68,7 @@ proc_create(const char *name)
 
 	/* Dummy values - ignore them */
 	unsigned int rip;
+	size_t i;
 	rip = 1;
 
 	proc = kmalloc(sizeof(*proc));
@@ -77,6 +78,7 @@ proc_create(const char *name)
 	proc->p_name = kstrdup(name);
 	if (proc->p_name == NULL) {
 		kfree(proc);
+		proc = NULL;
 		return NULL;
 	}
 
@@ -93,7 +95,15 @@ proc_create(const char *name)
 
 	proc->stdin = STDIN_FILENO;
 	proc->stdout = STDOUT_FILENO;
-	proc->stderr = STDERR_FILENO;
+	proc->stderr = STDERR_FILENO; 
+	proc->exited = false;
+
+	for (i = 0; i < MAX_FD; i++)
+	{
+		proc->fd_table[i] = NULL;
+	}
+	proc->child_status = 0;
+	
 
 	/* Setup its Parent 
 		If a proc is its own parent just set the parent to NULL
@@ -233,21 +243,26 @@ proc_destroy(struct proc *proc)
 	/* Empty Pid in pid bitmap */
 	lock_acquire(pid_lock);
 	bitmap_unmark(pid_bitmap, proc->pid);
+	array_remove(process_table, (unsigned int)proc->pid);
 	lock_release(pid_lock);
 
 
 
 	/* Free the file-descriptor table 
 		** Hoping things dont blow up by this :)
-	*/
+		** Things blew up so I removed this 
+	*/	
+	
+
 	if(proc->p_name != NULL)
-		kfree(proc->p_name);
+	 	kfree(proc->p_name);
 
 	proc->parent = NULL;
 	cv_destroy(proc->cv);
 	lock_destroy(proc->cv_lock);
-	
+
 	kfree(proc);
+	proc = NULL;
 }
 
 /*

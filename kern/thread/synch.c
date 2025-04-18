@@ -57,6 +57,7 @@ sem_create(const char *name, unsigned initial_count)
 	sem->sem_name = kstrdup(name);
 	if (sem->sem_name == NULL) {
 		kfree(sem);
+		sem = NULL;
 		return NULL;
 	}
 
@@ -64,6 +65,7 @@ sem_create(const char *name, unsigned initial_count)
 	if (sem->sem_wchan == NULL) {
 		kfree(sem->sem_name);
 		kfree(sem);
+		sem = NULL;
 		return NULL;
 	}
 
@@ -160,6 +162,7 @@ lock_create(const char *name)
 	if (lock->mutex_wchan == NULL){
 		kfree(lock->lk_name);
 		kfree(lock);
+		lock = NULL;
 		return NULL;
 	}
 	lock -> holder = NULL;
@@ -179,6 +182,7 @@ lock_destroy(struct lock *lock)
 	kfree(lock->holder);
 	kfree(lock->lk_name);
 	kfree(lock);
+	lock = NULL;
 }
 
 void
@@ -259,6 +263,7 @@ cv_create(const char *name)
 	cv->cv_name = kstrdup(name);
 	if (cv->cv_name==NULL) {
 		kfree(cv);
+		cv = NULL;
 		return NULL;
 	}
 
@@ -283,6 +288,7 @@ cv_destroy(struct cv *cv)
 	spinlock_cleanup(&cv->cv_lock);
 	kfree(cv->cv_name);
 	kfree(cv);
+	cv = NULL;
 }
 
 void
@@ -355,6 +361,7 @@ struct rwlock * rwlock_create(const char *name){
 	if (rwlock->reader_sem == NULL){
 		kfree(rwlock->rwlock_name);
 		kfree(rwlock);
+		rwlock = NULL;
 		return NULL;
 	}
 
@@ -363,6 +370,7 @@ struct rwlock * rwlock_create(const char *name){
 		sem_destroy(rwlock->reader_sem);
 		kfree(rwlock->rwlock_name);
 		kfree(rwlock);
+		rwlock = NULL;
 		return NULL;
 	}
 
@@ -372,6 +380,7 @@ struct rwlock * rwlock_create(const char *name){
 		sem_destroy(rwlock->reader_sem);
 		kfree(rwlock->rwlock_name);
 		kfree(rwlock);
+		rwlock = NULL;
 		return NULL;
 	}
 
@@ -383,6 +392,7 @@ struct rwlock * rwlock_create(const char *name){
 		sem_destroy(rwlock->reader_sem);
 		kfree(rwlock->rwlock_name);
 		kfree(rwlock);
+		rwlock = NULL;
 		return NULL;
 	}
 
@@ -443,6 +453,7 @@ void rwlock_destroy(struct rwlock * lock){
 	sem_destroy(lock->reader_sem);
 	kfree(lock->rwlock_name);
 	kfree(lock);
+	lock = NULL;
 };
 
 void rwlock_acquire_read(struct rwlock *lock){

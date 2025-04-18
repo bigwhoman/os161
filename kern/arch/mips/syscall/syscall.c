@@ -230,5 +230,6 @@ enter_forked_process( void *arg, long unsigned int a)
 
     memcpy(&new_tf, tf, sizeof(*tf));
 	kfree(tf);
+	tf = NULL;
 	mips_usermode(&new_tf);
 }
