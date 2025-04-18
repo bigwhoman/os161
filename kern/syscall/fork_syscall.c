@@ -34,11 +34,13 @@ int sys_fork(struct trapframe *tf, int *retval){
     for (size_t i = 0; i < MAX_FD; i++)
     {
         newproc -> fd_table[i] = curproc -> fd_table[i];
+        newproc -> fd_pos[i] = curproc -> fd_pos[i];
     }
 
     newproc -> stdin = curproc -> stdin;
     newproc -> stdout = curproc -> stdout;
     newproc -> stderr = curproc -> stderr;
+    newproc -> exited = false;
 
     // as_define_stack(newproc->p_addrspace, &stackptr);
 

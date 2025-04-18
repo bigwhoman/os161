@@ -91,6 +91,8 @@ struct proc {
 										 * TODO : Change with array type
 										 * TODO 2 : add a locking system
 										*/
+	
+	unsigned int *fd_pos[MAX_FD];
 
 	int stdin;	/* stdin fd */
 

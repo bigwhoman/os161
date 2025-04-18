@@ -31,6 +31,8 @@ int sys_open(char *filename, int flags, mode_t mode, int *retval){
                 continue;
         if(curproc->fd_table[i] == NULL){
             curproc->fd_table[i] = v;
+            /* This needs to be changed according to mode !!*/
+            *curproc->fd_pos[i] = 0;
             *retval = i;
             break;
         }

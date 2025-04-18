@@ -101,6 +101,8 @@ proc_create(const char *name)
 	for (i = 0; i < MAX_FD; i++)
 	{
 		proc->fd_table[i] = NULL;
+		proc->fd_pos[i] = (unsigned int *)kmalloc(sizeof(unsigned int *));
+		*proc-> fd_pos[i] = 0;
 	}
 	proc->child_status = 0;
 	
@@ -139,10 +141,7 @@ static void proctable_add(struct proc *proc)
 {
     unsigned int rip;
     rip = 0;
-    bitmap_alloc(pid_bitmap, &proc->pid);
-	/* TODO : I think this if statement has a problem 
-	 * For some reason sometimes deadbeef ocurrs if I insert command too fast
-	 */
+    bitmap_alloc(pid_bitmap, &proc->pid);	
     if (proc->pid >= array_num(process_table))
     {
         array_add(process_table, proc, &rip);
@@ -243,7 +242,7 @@ proc_destroy(struct proc *proc)
 	/* Empty Pid in pid bitmap */
 	lock_acquire(pid_lock);
 	bitmap_unmark(pid_bitmap, proc->pid);
-	array_remove(process_table, (unsigned int)proc->pid);
+	// array_remove(process_table, (unsigned int)proc->pid);
 	lock_release(pid_lock);
 
 

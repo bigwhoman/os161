@@ -59,13 +59,13 @@ ssize_t sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
 		v = (curproc)->fd_table[fd];
 		struct iovec iov;
 		struct uio u;
-
+		
 		iov.iov_ubase = (userptr_t)buf;
 		iov.iov_len = buflen;		 // length of the memory space
 		u.uio_iov = &iov;
 		u.uio_iovcnt = 1;
 		u.uio_resid = buflen;          // amount to read from the file
-		u.uio_offset = 0;
+		u.uio_offset = *curproc -> fd_pos[fd];
 		u.uio_segflg = UIO_USERSPACE;
 		u.uio_rw = UIO_WRITE;
 		u.uio_space = curproc->p_addrspace;
@@ -80,6 +80,7 @@ ssize_t sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
 			/* short read; problem? */
 			KASSERT(false);
 		}
+		*curproc -> fd_pos[fd] += (buflen - u.uio_resid);
 		*retval=buflen-u.uio_resid;
     }
     return err;

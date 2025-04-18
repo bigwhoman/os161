@@ -38,33 +38,41 @@ int sys_exit(int status){
      *  which is waiting for us, send 
      *  a signal to parent's cv channel to wake it up
     */
-    if (curproc->parent != NULL ){ 
-            lock_acquire(curproc->parent->cv_lock);
-            curproc->exited = true;
-            // curproc->parent->waiting_for_pid = 0x0;
-            curproc->parent->child_status = status;
-            cv_signal(curproc->parent->cv, curproc->parent->cv_lock);
-            lock_release(curproc->parent->cv_lock);
-    }
-    /* Close all file descriptors
-	 *	
-	 */
-	int close_ret;
-    int close_err;
-    close_ret = 0;
-	for (size_t i = 0; i < MAX_FD; i++)
-	{
-        if (curproc->fd_table[i] != NULL)
+    struct proc* parent = curproc->parent;
+    if (parent != NULL)
+    {
+        lock_acquire(parent->cv_lock);
+        curproc->exited = true;
+        // curproc->parent->waiting_for_pid = 0x0;
+        parent->child_status = status;
+        cv_signal(curproc->parent->cv, curproc->parent->cv_lock);
+
+        /* Close all file descriptors
+         *
+         */
+        int close_ret;
+        int close_err;
+        close_ret = 0;
+        for (size_t i = 0; i < MAX_FD; i++)
         {
-            close_err = sys_close(i, &close_ret);
-            if (close_err)
+            if (curproc->fd_table[i] != NULL)
             {
-                kprintf("Error in closing fd number : %d\n", i);
+                close_err = sys_close(i, &close_ret);
+                if (close_err)
+                {
+                    kprintf("Error in closing fd number : %d\n", i);
+                }
             }
         }
+        // kprintf("%d Exited \n", curproc->pid);
+        /*
+         * Detach from our process. You might need to move this action
+         * around, depending on how your wait/exit works.
+         */
+        proc_remthread(curthread);
+        lock_release(parent->cv_lock);
+        thread_exit();
     }
-    // kprintf("%d Exited \n", curproc->pid);
-    thread_exit();
     /* We would not get here */
     return 0;
 }
