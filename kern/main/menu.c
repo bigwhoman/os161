@@ -133,9 +133,6 @@ common_prog(int nargs, char **args)
 		return ENOMEM;
 	}
 
-	lock_acquire(curproc -> cv_lock);
-	curproc -> waiting_for_pid = proc -> pid;
-	lock_release(curproc -> cv_lock);
 
 	tc = thread_count;
 
@@ -157,7 +154,10 @@ common_prog(int nargs, char **args)
 	// Wait for all threads to finish cleanup, otherwise khu be a bit behind,
 	// especially once swapping is enabled.
 	thread_wait_for_count(tc);
-
+	lock_acquire(curproc->cv_lock);
+	while (!proc->exited)
+		cv_wait(curproc->cv, curproc->cv_lock);
+	lock_release(curproc->cv_lock);
 	return 0;
 }
 
@@ -905,10 +905,7 @@ menu_execute(char *line, int isargs)
 	 * Tell the main kernel thread to wait for the program to finish
 	*/
 
-	lock_acquire(curproc->cv_lock);
-	while(curproc->waiting_for_pid > 0)
-		cv_wait(curproc->cv, curproc->cv_lock);
-	lock_release(curproc->cv_lock);
+	
 }
 
 /*

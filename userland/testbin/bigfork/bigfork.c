@@ -177,8 +177,6 @@ void
 dowait(pid_t pid)
 {
 	int status;
-
-	lsay("Pid %d waiting for %d\n",getpid(),pid);
 	if (pid == -1) {
 		failures++;
 		return;
@@ -201,7 +199,6 @@ dowait(pid_t pid)
 			failures += WEXITSTATUS(status);
 		}
 	}
-	lsay("Got %d\n",pid);
 }
 
 static

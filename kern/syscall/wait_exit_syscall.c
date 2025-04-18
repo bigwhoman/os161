@@ -31,23 +31,20 @@ int sys_exit(int status){
      * 
      * 2. We just signal the parents cv, exit the thread and destroy its process :)
      * 
-     *      TODO : send the exited processes exit status to parent
+     * 
      */
 
     /* If we have a parent (we are not init proc) 
      *  which is waiting for us, send 
      *  a signal to parent's cv channel to wake it up
     */
-    if (curproc->parent != NULL ){
-        lock_acquire(curproc->parent->cv_lock);
-        if (curproc->parent->waiting_for_pid == curproc->pid)
-        {
-            curproc->parent->waiting_for_pid = 0x0;
-            curproc->parent->last_waited_child = curproc->pid;
+    if (curproc->parent != NULL ){ 
+            lock_acquire(curproc->parent->cv_lock);
+            curproc->exited = true;
+            // curproc->parent->waiting_for_pid = 0x0;
             curproc->parent->child_status = status;
             cv_signal(curproc->parent->cv, curproc->parent->cv_lock);
-        }
-        lock_release(curproc->parent->cv_lock);
+            lock_release(curproc->parent->cv_lock);
     }
 
     // kprintf("%d Exited \n", curproc->pid);
@@ -94,13 +91,10 @@ int sys_wait(pid_t pid, int *status, int options, int *retval){
      * sleeping state until the child wakes it up :)
     */
     lock_acquire(curproc->cv_lock);
-    if((int)pid != (int)curproc ->last_waited_child){
-    curproc -> waiting_for_pid = pid;
     *retval = pid;
-	while(curproc->waiting_for_pid > 0 && curproc->waiting_for_pid != 0xdeadbeef)
+	while(proc->exited != true)
 		cv_wait(curproc->cv, curproc->cv_lock);
-    }
-    *retval = curproc->last_waited_child;
+    proc_destroy(proc);
     if (status != NULL){
         int encode = 0;
         switch(curproc->child_status){

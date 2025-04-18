@@ -77,6 +77,7 @@ struct proc {
 	unsigned int pid;
 	struct spinlock p_lock;		/* Lock for this structure */
 	unsigned p_numthreads;		/* Number of threads in this process */
+	int exited;
 
 	/* VM */
 	struct addrspace *p_addrspace;	/* virtual address space */
@@ -104,11 +105,7 @@ struct proc {
 	struct cv *cv;
 	struct lock *cv_lock;
 	/* child it is waiting for and its status */
-	unsigned int waiting_for_pid;
-	unsigned int last_waited_child;
 	int child_status;
-
-
 	/* add more material here as needed */
 };
 

@@ -358,8 +358,8 @@ proc_remthread(struct thread *t)
 
 
 	spl = splhigh();
-	if (t -> t_proc -> p_numthreads == 0)
-		proc_destroy(t -> t_proc);
+	/* Seems like reference counting is not a good option to destroy procs D: */	
+	// 	proc_destroy(t -> t_proc);
 	t->t_proc = NULL;
 	splx(spl);
 }
@@ -369,7 +369,8 @@ proc_remthread(struct thread *t)
  *
  * Caution: address spaces aren't refcounted. If you implement
  * multithreaded processes, make sure to set up a refcount scheme or
- * some other method to make this safe. Otherwise the returned address
+ * some other method to make this safe. Otherwis
+    pe the returned address
  * space might disappear under you.
  */
 struct addrspace *
