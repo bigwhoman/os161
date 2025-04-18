@@ -117,7 +117,7 @@ kgets(char *buf, size_t maxlen)
 		}
 	}
 	/*TODO: This causes a problem with paging.*/
-	// buf[pos] = 0;
+	buf[pos] = 0;
 	// history[i] = (char *)kmalloc(sizeof(buf));
 	// strcpy(history[i], buf);
 	// i++;
