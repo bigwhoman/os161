@@ -53,10 +53,8 @@ main(int argc, char *argv[])
 	(void) argc;
 	warnx("starting the fork\n");
 	int res;
-	int res2;
 	fork();
 	res = fork();
-	res2 = fork();
-	printf("miow from %d %d\n",res, res2);
+	printf("miow from %d\n",res);
 	return 0;
 }

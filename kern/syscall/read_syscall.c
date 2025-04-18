@@ -1,5 +1,6 @@
 #include <syscall.h>
 #include <kern/unistd.h>
+#include <kern/errno.h>
 #include <types.h>
 #include <lib.h>
 #include <copyinout.h>
@@ -85,8 +86,8 @@ int sys_read(volatile int fd, void *buf, size_t buflen, int *retval){
 		}
 
 		if (u.uio_resid != 0) {
-			/* short read; problem with executable? */
-			KASSERT(false);
+				/* short read; problem with executable? */
+				err = ENOEXEC;
 		}
 		*retval = buflen - u.uio_resid;
 	}

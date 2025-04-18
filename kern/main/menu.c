@@ -108,6 +108,22 @@ cmd_progthread(void *ptr, unsigned long nargs)
 }
 
 /*
+ *	The main purpose of this function is to kill the main program
+ *	and any orphans created 
+ */
+static
+void
+purge(){
+	size_t i;
+	for (i = 0; i < array_num(process_table); i++)
+	{
+		struct proc *proc = array_get(process_table, (unsigned int)i);	
+		if (proc != NULL && proc->exited == true)
+			proc_destroy(proc);
+	}	
+}
+
+/*
  * Common code for cmd_prog and cmd_shell.
  *
  * Note that this does not wait for the subprogram to finish, but
@@ -158,8 +174,11 @@ common_prog(int nargs, char **args)
 	while (!proc->exited)
 		cv_wait(curproc->cv, curproc->cv_lock);
 	lock_release(curproc->cv_lock);
+	purge();
 	return 0;
 }
+
+
 
 /*
  * Command for running an arbitrary userlevel program.

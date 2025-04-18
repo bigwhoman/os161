@@ -71,6 +71,8 @@ struct array* process_table;
  * However, note that p_addrspace must be protected by a spinlock:
  * thread_switch needs to be able to fetch the current address space
  * without sleeping.
+ * 
+ * 
  */
 struct proc {
 	char *p_name;			/* Name of this process */
