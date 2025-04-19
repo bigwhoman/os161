@@ -138,7 +138,7 @@
         "<span foreground='#98971a'> </span> Spotify Premium",
 
       "OBS(.*)": 
-        "<span foreground='#d5c4a1'> </span> OBS Studio",
+        "<span foreground='#504945'> </span> OBS Studio",
 
       "VLC media player": 
         "<span foreground='#d65d0e'>󰕼 </span> VLC Media Player",
@@ -214,8 +214,8 @@
   },
 
   "custom/distro": {
-    "format": "❄ ",
-    "tooltip": false
+	"format": "❄ ",
+	"tooltip": false
   },
 
   "idle_inhibitor": {
@@ -251,7 +251,7 @@
         "months": 
           "<span color='#928374'><b>{}</b></span>",
         "weekdays": 
-          "<span color='#d5c4a1' font='7'>{}</span>",
+          "<span color='#504945' font='7'>{}</span>",
         "today": 
           "<span color='#cc241d'><b>{}</b></span>"
       }
