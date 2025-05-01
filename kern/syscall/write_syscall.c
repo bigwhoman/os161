@@ -44,7 +44,7 @@ ssize_t sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
         return err;
     }
 
-
+	lock_acquire(curproc->fd_lock[fd]);
 	/*
 	 *	Explicitly check for special file descriptors
 	 */
@@ -73,6 +73,7 @@ ssize_t sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
 		err = VOP_WRITE(v, &u);
 
 		if (err) {
+			lock_release(curproc->fd_lock[fd]);
 			return err;
 		}
 
@@ -83,5 +84,6 @@ ssize_t sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
 		*curproc -> fd_pos[fd] += (buflen - u.uio_resid);
 		*retval=buflen-u.uio_resid;
     }
+	lock_release(curproc->fd_lock[fd]);
     return err;
 }

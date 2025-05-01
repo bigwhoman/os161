@@ -102,7 +102,8 @@ proc_create(const char *name)
 	{
 		proc->fd_table[i] = NULL;
 		proc->fd_pos[i] = (unsigned int *)kmalloc(sizeof(unsigned int *));
-		*proc-> fd_pos[i] = 0;
+		*proc->fd_pos[i] = 0;
+		proc->fd_lock[i] = lock_create("FD Lock");
 	}
 	proc->child_status = 0;
 	
@@ -175,6 +176,7 @@ proc_destroy(struct proc *proc)
 
 	KASSERT(proc != NULL);
 	KASSERT(proc != kproc);
+	// size_t i;
 
 	/*
 	 * We don't take p_lock in here because we must have the only
@@ -246,6 +248,13 @@ proc_destroy(struct proc *proc)
 	lock_release(pid_lock);
 
 
+	/* Destroy File Locks*/
+	// for (i = 0; i < MAX_FD; i++)
+	// {
+	// 	kfree(proc->fd_pos[i]);
+	// 	lock_destroy(proc -> fd_lock[i]);
+	// }
+	
 
 	/* Free the file-descriptor table 
 		** Hoping things dont blow up by this :)

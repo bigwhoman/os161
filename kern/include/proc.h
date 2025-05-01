@@ -92,7 +92,9 @@ struct proc {
 										 * TODO 2 : add a locking system
 										*/
 	
-	unsigned int *fd_pos[MAX_FD];
+	unsigned int *fd_pos[MAX_FD]; /* Find Position To Write in File*/
+
+	struct lock *fd_lock[MAX_FD]; /* File Locks */
 
 	int stdin;	/* stdin fd */
 
@@ -112,6 +114,8 @@ struct proc {
 	int child_status;
 	/* add more material here as needed */
 };
+
+
 
 /* This is the process structure for the kernel and for kernel-only threads. */
 extern struct proc *kproc;

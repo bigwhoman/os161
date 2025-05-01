@@ -35,6 +35,7 @@ int sys_fork(struct trapframe *tf, int *retval){
     {
         newproc -> fd_table[i] = curproc -> fd_table[i];
         newproc -> fd_pos[i] = curproc -> fd_pos[i];
+        newproc -> fd_lock[i] = curproc -> fd_lock[i];
     }
 
     newproc -> stdin = curproc -> stdin;
