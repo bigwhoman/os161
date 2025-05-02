@@ -41,13 +41,14 @@
  * Unless you're implementing multithreaded user processes, the only
  * process that will have more than one thread is the kernel process.
  */
-
 #include <types.h>
 #include <spl.h>
 #include <proc.h>
 #include <current.h>
 #include <addrspace.h>
 #include <vnode.h>
+#include <kern/fcntl.h>
+#include <vfs.h>
 #include <kern/unistd.h>
 
 /*
@@ -68,7 +69,8 @@ proc_create(const char *name)
 
 	/* Dummy values - ignore them */
 	unsigned int rip;
-	size_t i;
+	size_t fd;
+	int ret;
 	rip = 1;
 
 	proc = kmalloc(sizeof(*proc));
@@ -97,14 +99,34 @@ proc_create(const char *name)
 	proc->stdout = STDOUT_FILENO;
 	proc->stderr = STDERR_FILENO; 
 	proc->exited = false;
+	if (strcmp(name, "[kernel]") && proc != curproc)
+		for (fd = 0; fd < MAX_FD; fd++)
+		{
+			if (fd < 3)
+			{
+				const char *console = "con:";
+				int flag = fd ? O_WRONLY : O_RDONLY;
+				struct vnode *stdio_vnode;
+				ret = vfs_open(kstrdup(console), flag, 0, &stdio_vnode);
+				if (ret)
+				{
+					kprintf("stdio is f..d up, aborting...");
+					kfree(proc);
+					return NULL;
+				}
 
-	for (i = 0; i < MAX_FD; i++)
-	{
-		proc->fd_table[i] = NULL;
-		proc->fd_pos[i] = (unsigned int *)kmalloc(sizeof(unsigned int *));
-		*proc->fd_pos[i] = 0;
-		proc->fd_lock[i] = lock_create("FD Lock");
-	}
+				proc->fd_table[fd] = stdio_vnode;
+			}
+			else
+			{
+				proc->fd_table[fd] = NULL;
+			}
+
+			/* Not really sure about my way of implementation */
+			proc->fd_pos[fd] = (unsigned int *)kmalloc(sizeof(unsigned int *));
+			*proc->fd_pos[fd] = 0;
+			proc->fd_lock[fd] = lock_create("FD Lock");
+		}
 	proc->child_status = 0;
 	
 

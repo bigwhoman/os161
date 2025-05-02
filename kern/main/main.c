@@ -102,7 +102,7 @@ boot(void)
 	kprintf("%s", harvard_copyright);
 	kprintf("\n");
 
-	kprintf("Put-your-group-name-here's system version %s (%s #%d)\n",
+	kprintf("BigWhoMOS version %s (%s #%d)\n",
 		GROUP_VERSION, buildconfig, buildversion);
 	kprintf("\n");
 
@@ -124,7 +124,7 @@ boot(void)
 	kprintf("\n");
 	kheap_nextgeneration();
 
-	/* Syscalls bootstrap */
+	// /* Syscalls bootstrap */
 	write_bootstrap();
 
 	/* Late phase of initialization. */

@@ -3,31 +3,16 @@
 #include <stdarg.h>
 #include <kern/unistd.h>
 #include <lib.h>
-#include <copyinout.h>
-#include <proc.h>
-#include <uio.h>
-#include <current.h>
-#include <synch.h>
 
-struct lock *console_lock;
 
-static
-void
-console_send(void *junk, const char *data, size_t len)
-{
-	size_t i;
-
-	(void)junk;
-
-	for (i=0; i<len; i++) {
-		putch(data[i]);
-	}
-}
+struct lock* console_lock;
 
 /* Bootstrap for write syscall */
 void write_bootstrap(){
 	console_lock = lock_create("Console Lock");
 }
+
+
 
 /*
  *
@@ -36,54 +21,36 @@ void write_bootstrap(){
  */
 ssize_t sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
     int err;
-    char kern_buff[buflen];
-    err = copyin(buf, kern_buff, buflen);
 	
-    if(err){
-        *retval = -1;
-        return err;
-    }
-
 	lock_acquire(curproc->fd_lock[fd]);
-	/*
-	 *	Explicitly check for special file descriptors
-	 */
-    if(fd == curproc -> stdout || fd == curproc -> stderr){
-		lock_acquire(console_lock);
-        console_send(NULL, kern_buff, buflen);
-		*retval = buflen;
-		lock_release(console_lock);
-    } else {
-        struct vnode *v;
-		/* TODO : Check Valid/inbounds fd */
-		v = (curproc)->fd_table[fd];
-		struct iovec iov;
-		struct uio u;
-		
-		iov.iov_ubase = (userptr_t)buf;
-		iov.iov_len = buflen;		 // length of the memory space
-		u.uio_iov = &iov;
-		u.uio_iovcnt = 1;
-		u.uio_resid = buflen;          // amount to read from the file
-		u.uio_offset = *curproc -> fd_pos[fd];
-		u.uio_segflg = UIO_USERSPACE;
-		u.uio_rw = UIO_WRITE;
-		u.uio_space = curproc->p_addrspace;
 
-		err = VOP_WRITE(v, &u);
+	struct vnode *v;
+	/* TODO : Check Valid/inbounds fd */
+	v = (curproc)->fd_table[fd];
+	struct iovec iov;
+	struct uio u;
 
-		if (err) {
-			lock_release(curproc->fd_lock[fd]);
-			return err;
-		}
+	iov.iov_ubase = (userptr_t)buf;
+	iov.iov_len = buflen; // length of the memory space
+	u.uio_iov = &iov;
+	u.uio_iovcnt = 1;
+	u.uio_resid = buflen; // amount to read from the file
+	u.uio_offset = *curproc->fd_pos[fd];
+	u.uio_segflg = UIO_USERSPACE;
+	u.uio_rw = UIO_WRITE;
+	u.uio_space = curproc->p_addrspace;
 
-		if (u.uio_resid != 0) {
-			/* short read; problem? */
-			KASSERT(false);
-		}
-		*curproc -> fd_pos[fd] += (buflen - u.uio_resid);
-		*retval=buflen-u.uio_resid;
-    }
+	err = VOP_WRITE(v, &u);
+
+	if (err)
+	{
+		lock_release(curproc->fd_lock[fd]);
+		return err;
+	}
+
+	*curproc->fd_pos[fd] += (buflen - u.uio_resid);
+	*retval = buflen - u.uio_resid;
+
 	lock_release(curproc->fd_lock[fd]);
     return err;
 }

@@ -34,6 +34,10 @@
 #include <cdefs.h> /* for __DEAD */
 #include <types.h>
 #include <addrspace.h>
+#include <proc.h>
+#include <current.h>
+#include <uio.h>
+#include <synch.h>
 struct trapframe; /* from <machine/trapframe.h> */
 
 /*
