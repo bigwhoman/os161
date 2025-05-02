@@ -5,14 +5,6 @@
 #include <lib.h>
 
 
-struct lock* console_lock;
-
-/* Bootstrap for write syscall */
-void write_bootstrap(){
-	console_lock = lock_create("Console Lock");
-}
-
-
 
 /*
  *

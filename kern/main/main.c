@@ -124,9 +124,6 @@ boot(void)
 	kprintf("\n");
 	kheap_nextgeneration();
 
-	// /* Syscalls bootstrap */
-	write_bootstrap();
-
 	/* Late phase of initialization. */
 	vm_bootstrap();
 	kprintf_bootstrap();
