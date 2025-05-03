@@ -28,14 +28,20 @@ int sys_fork(struct trapframe *tf, int *retval){
     memcpy(new_tf, tf, sizeof(*tf));
 
     newproc -> parent = curproc;
-
-	/* VFS fields */
+    DEBUG(DB_GEN, "Proc Forked %p - Parent %p\n", newproc, curproc);
+    /* VFS fields */
 
     for (size_t i = 0; i < MAX_FD; i++)
     {
+        lock_acquire(curproc -> fd_lock[i]);
         newproc -> fd_table[i] = curproc -> fd_table[i];
         newproc -> fd_pos[i] = curproc -> fd_pos[i];
         newproc -> fd_lock[i] = curproc -> fd_lock[i];
+        
+       /* We need to add the locking system for this */ 
+        newproc -> fd_count[i] = curproc -> fd_count[i];
+        *newproc -> fd_count[i] += 1;
+        lock_release(curproc -> fd_lock[i]); 
     }
 
     newproc -> stdin = curproc -> stdin;
@@ -47,9 +53,8 @@ int sys_fork(struct trapframe *tf, int *retval){
 
     /* VM fields */
     as_copy(curproc -> p_addrspace, &newproc->p_addrspace);
-    
-    
 
+    
     result = thread_fork(curproc -> p_name/* thread name */,
 			newproc /* new process */,
 			enter_forked_process /* thread function */,

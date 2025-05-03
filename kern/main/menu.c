@@ -170,6 +170,7 @@ common_prog(int nargs, char **args)
 	// Wait for all threads to finish cleanup, otherwise khu be a bit behind,
 	// especially once swapping is enabled.
 	thread_wait_for_count(tc);
+	DEBUG(DB_PROC, "Mother Proc --> %p\n", curproc);
 	lock_acquire(curproc->cv_lock);
 	while (!proc->exited)
 		cv_wait(curproc->cv, curproc->cv_lock);

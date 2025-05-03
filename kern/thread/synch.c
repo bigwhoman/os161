@@ -188,7 +188,7 @@ lock_destroy(struct lock *lock)
 void
 lock_acquire(struct lock *lock)
 {
-	
+
 	KASSERT(lock != NULL);
 	/*
 	 * May not block in an interrupt handler.
@@ -211,10 +211,10 @@ lock_acquire(struct lock *lock)
 		wchan_sleep(lock->mutex_wchan, &lock->mutex_lock);
 	}
 	lock -> holder = curthread;
-	
+	DEBUG(DB_SEMFS, "Lock %p - %s Aquired By %p\n",lock, lock -> lk_name, lock -> holder);	
 	KASSERT(lock_do_i_hold(lock));
 	spinlock_release(&lock->mutex_lock);
-
+	
 	
 	/* Call this (atomically) once the lock is acquired */
 	HANGMAN_ACQUIRE(&curthread->t_hangman, &lock->lk_hangman);
@@ -228,6 +228,7 @@ lock_release(struct lock *lock)
 	KASSERT(lock_do_i_hold(lock));
 	HANGMAN_RELEASE(&curthread->t_hangman, &lock->lk_hangman);
 	spinlock_acquire(&lock->mutex_lock);
+	DEBUG(DB_SEMFS, "Lock %p - %s Released By %p\n",lock, lock -> lk_name, lock -> holder);
 	lock -> holder = NULL;
 	wchan_wakeone(lock->mutex_wchan, &lock->mutex_lock);
 	spinlock_release(&lock->mutex_lock);		

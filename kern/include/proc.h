@@ -96,6 +96,10 @@ struct proc {
 
 	struct lock *fd_lock[MAX_FD]; /* File Locks */
 
+	unsigned int *fd_count[MAX_FD];
+
+	struct lock *table_lock;
+
 	int stdin;	/* stdin fd */
 
 	int stdout; /* stdout fd */

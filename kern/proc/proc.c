@@ -102,6 +102,8 @@ proc_create(const char *name)
 	if (strcmp(name, "[kernel]") && proc != curproc)
 		for (fd = 0; fd < MAX_FD; fd++)
 		{
+			proc->fd_count[fd] = (unsigned int *)kmalloc(sizeof(unsigned int *));
+			*proc->fd_count[fd] = 0;
 			if (fd < 3)
 			{
 				const char *console = "con:";
@@ -114,8 +116,8 @@ proc_create(const char *name)
 					kfree(proc);
 					return NULL;
 				}
-
 				proc->fd_table[fd] = stdio_vnode;
+				*proc->fd_count[fd] += 1;
 			}
 			else
 			{
@@ -200,6 +202,7 @@ proc_destroy(struct proc *proc)
 	KASSERT(proc != kproc);
 	// size_t i;
 
+    DEBUG(DB_PROC, "Proc Destroyed %p By %p\n", proc, curproc);
 	/*
 	 * We don't take p_lock in here because we must have the only
 	 * reference to this structure. (Otherwise it would be

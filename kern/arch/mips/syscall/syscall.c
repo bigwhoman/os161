@@ -169,7 +169,12 @@ syscall(struct trapframe *tf)
 
 		break;
 
-		
+		/* I do not know what this is and what to do with it D:*/
+		case SYS_sigsuspend:
+		err = 0;
+		retval = 0;
+
+		break;
 	    /* Add stuff here */
 
 	    default:
