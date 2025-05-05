@@ -50,12 +50,12 @@
 #include <kern/fcntl.h>
 #include <vfs.h>
 #include <kern/unistd.h>
-
+#include <generic/console.h>
 /*
  * The process for the kernel; this holds all the kernel-only threads.
  */
 struct proc *kproc;
-
+struct lock *console_lock;
 static void proctable_add(struct proc *proc);
 
 /*
@@ -108,7 +108,7 @@ proc_create(const char *name)
 			{
 				const char *console = "con:";
 				int flag = fd ? O_WRONLY : O_RDONLY;
-				struct vnode *stdio_vnode;
+				struct vnode *stdio_vnode; 
 				ret = vfs_open(kstrdup(console), flag, 0, &stdio_vnode);
 				if (ret)
 				{
@@ -118,10 +118,12 @@ proc_create(const char *name)
 				}
 				proc->fd_table[fd] = stdio_vnode;
 				*proc->fd_count[fd] += 1;
+				proc -> fd_lock[fd] = console_lock;
 			}
 			else
 			{
 				proc->fd_table[fd] = NULL;
+				proc->fd_lock[fd] = lock_create("FD Lock");
 			}
 
 			/* Not really sure about my way of implementation */
@@ -130,7 +132,6 @@ proc_create(const char *name)
 			proc -> fd_mode[fd] = -1;
 			proc -> fd_flags[fd] = -1;
 			proc -> fd_path[fd] = NULL;
-			proc->fd_lock[fd] = lock_create("FD Lock");
 		}
 	proc->child_status = 0;
 	
@@ -309,6 +310,7 @@ proc_bootstrap(void)
 {
 	pid_lock = lock_create("Pid Lock");
 	pid_bitmap = bitmap_create(MAX_PID);
+	console_lock = lock_create("Console Lock");
 	/* TODO : Clean this before last process shutdown */
 	process_table = array_create();
 	kproc = proc_create("[kernel]");

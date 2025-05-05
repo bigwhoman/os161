@@ -26,12 +26,12 @@ int sys_open(char *filename, int flags, mode_t mode, int *retval){
     for (size_t i = 0; i < curproc->max_fd; i++)
     {
         lock_acquire(curproc -> fd_lock[i]);
-        // if((int)i == curproc -> stdin ||
-        //     (int)i == curproc -> stdout || 
-        //      (int)i == curproc -> stderr ){
-        //     lock_release(curproc->fd_lock[i]);
-        //     continue;
-        // }
+        if((int)i == curproc -> stdin ||
+            (int)i == curproc -> stdout || 
+             (int)i == curproc -> stderr ){
+            lock_release(curproc->fd_lock[i]);
+            continue;
+        }
         if(curproc->fd_table[i] == NULL){
             curproc->fd_table[i] = v;
             /* This needs to be changed according to mode !!*/
@@ -85,6 +85,7 @@ int sys_close(int fd, int *retval){
         return EBADF;
     }
     vfs_close(v);
+    curproc -> fd_count[fd] -= 1;
     curproc -> fd_table[fd] = NULL; 
     lock_release(curproc->fd_lock[fd]);
     return 0;

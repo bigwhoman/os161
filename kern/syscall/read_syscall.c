@@ -37,11 +37,7 @@ int sys_read(volatile int fd, void *buf, size_t buflen, int *retval)
 		return err;
 	}
 
-	// if (u.uio_resid != 0)
-	// {
-	// 	/* short read; problem with executable? */
-	// 	err = ENOEXEC;
-	// }
+
 	*curproc->fd_pos[fd] += (buflen - u.uio_resid);
 	*retval = buflen - u.uio_resid;
 
