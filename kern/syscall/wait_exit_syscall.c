@@ -57,21 +57,11 @@ int sys_exit(int status){
         {
             if (curproc->fd_table[fd] != NULL)
             {
-                lock_acquire(curproc->fd_lock[fd]);
-                *curproc->fd_count[fd] -= 1;
-                if (*curproc->fd_count[fd] != 0)
-                {
-                    lock_release(curproc->fd_lock[fd]);
-                }
-                else
-                {
                     close_err = sys_close(fd, &close_ret);
                     if (close_err)
                     {
                         kprintf("Error in closing fd number : %d\n", fd);
-                    }
-                    lock_release(curproc->fd_lock[fd]);
-                }
+                    } 
             }
         }
         DEBUG(DB_PROC, "Proc Exited %p\n", curproc);

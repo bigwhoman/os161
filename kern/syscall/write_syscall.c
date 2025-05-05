@@ -14,6 +14,7 @@
 ssize_t sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
     int err;
 	
+	/* Could change this lock with rwlock maybe */
 	lock_acquire(curproc->fd_lock[fd]);
 
 	struct vnode *v;

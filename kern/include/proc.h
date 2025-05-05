@@ -96,7 +96,13 @@ struct proc {
 
 	struct lock *fd_lock[MAX_FD]; /* File Locks */
 
-	unsigned int *fd_count[MAX_FD];
+	unsigned int *fd_count[MAX_FD]; /* File reference counter (might delete this!!)*/
+
+	char *fd_path[MAX_FD]; /* File Names */
+
+	mode_t fd_mode[MAX_FD]; /* File Modes*/
+
+	int fd_flags[MAX_FD]; /* File Modes*/
 
 	struct lock *table_lock;
 
