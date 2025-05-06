@@ -91,16 +91,21 @@ int sys_exit(int status){
 
 int sys_wait(pid_t pid, int *status, int options, int *retval){
     int err;
-    unsigned int i;
     err = 0;
     lock_acquire(pid_lock);
-    struct proc *proc = array_get(process_table, (unsigned int)pid);
+    struct proc *proc;
+    proc = array_get(process_table, (unsigned int)pid);
+
+    DEBUG(DB_GEN, "Proc %p waiting on %p\n", curproc, proc);
+
     if (proc == NULL){
         *retval = -1;
+        lock_release(pid_lock);
         return ESRCH;
     } 
     if (proc -> parent != curproc) {
         *retval = -1;
+        lock_release(pid_lock);
         return ECHILD;
     }
     lock_release(pid_lock);
@@ -114,17 +119,13 @@ int sys_wait(pid_t pid, int *status, int options, int *retval){
      * We use a condvar to put the parent in a 
      * sleeping state until the child wakes it up :)
     */
-    DEBUG(DB_GEN, "Proc %p waiting on %p\n", curproc, proc);
+    
     lock_acquire(curproc->cv_lock);
     *retval = pid;
-	while(proc->exited != true)
-		cv_wait(curproc->cv, curproc->cv_lock);
-    for (i = 0; i < array_num(process_table); i++)
-	{
-		struct proc *proc = array_get(process_table, (unsigned int)i);	
-		if (proc != NULL && proc->exited == true && proc->parent == curproc)
-			proc_destroy(proc);
-	}	
+    while (proc->exited != true)
+        cv_wait(curproc->cv, curproc->cv_lock);
+    proc_destroy(proc);
+
     if (status != NULL){
         int encode = 0;
         switch(curproc->child_status){
