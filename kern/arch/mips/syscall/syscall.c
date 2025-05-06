@@ -99,90 +99,96 @@ syscall(struct trapframe *tf)
 
 	retval = 0;
 
-	switch (callno) {
-	    case SYS_reboot:
+	switch (callno)
+	{
+	case SYS_reboot:
 		err = sys_reboot(tf->tf_a0);
 		break;
 
-	    case SYS___time:
+	case SYS___time:
 		err = sys___time((userptr_t)tf->tf_a0,
-				 (userptr_t)tf->tf_a1);
+						 (userptr_t)tf->tf_a1);
 		break;
 
-		case SYS_write:
+	case SYS_write:
 		err = sys_write((int)tf->tf_a0,
-		 			(const char *)tf->tf_a1,
-		  				(ssize_t)tf->tf_a2,
+						(const char *)tf->tf_a1,
+						(ssize_t)tf->tf_a2,
 						&retval);
-		
 
 		break;
 
-		case SYS_read:
+	case SYS_read:
 		err = sys_read((int)tf->tf_a0,
-		 			( char *)tf->tf_a1,
-		  				(ssize_t)tf->tf_a2,
-						&retval);
+					   (char *)tf->tf_a1,
+					   (ssize_t)tf->tf_a2,
+					   &retval);
+
+		break;
+	case SYS_lseek:
+		err = (int)sys_lseek((int)tf->tf_a0,
+							 (off_t)tf->tf_a1,
+							 (int)tf->tf_a2,
+							 &retval);
 
 		break;
 
-		case SYS_open:
+	case SYS_open:
 		err = sys_open((char *)tf->tf_a0,
-		 			(int)tf->tf_a1,
-		  				(mode_t)tf->tf_a2,
-						&retval);
+					   (int)tf->tf_a1,
+					   (mode_t)tf->tf_a2,
+					   &retval);
 		break;
 
-		case SYS__exit :
-		err = sys_exit((int) tf->tf_a0);
+	case SYS__exit:
+		err = sys_exit((int)tf->tf_a0);
 
 		break;
 
-		case SYS_execv :
+	case SYS_execv:
 		err = sys_execv((char *)tf->tf_a0,
-							(char **) tf->tf_a1,
-								&retval);
+						(char **)tf->tf_a1,
+						&retval);
 
 		break;
 
-		case SYS_waitpid :
+	case SYS_waitpid:
 		err = sys_wait((pid_t)tf->tf_a0,
-							(int *)tf->tf_a1,
-							  (int) tf->tf_a2,
-								&retval);
-		
+					   (int *)tf->tf_a1,
+					   (int)tf->tf_a2,
+					   &retval);
+
 		break;
 
-		case SYS_close :
+	case SYS_close:
 		err = sys_close((int)tf->tf_a0, &retval);
 
 		break;
 
-		case SYS_getpid :
+	case SYS_getpid:
 		err = 0;
 		retval = sys_getpid();
 
 		break;
 
-		case SYS_fork :
+	case SYS_fork:
 		err = sys_fork(tf, &retval);
 
 		break;
 
-		/* I do not know what this is and what to do with it D:*/
-		case SYS_sigsuspend:
+	/* I do not know what this is and what to do with it D:*/
+	case SYS_sigsuspend:
 		err = 0;
 		retval = 0;
 
 		break;
-	    /* Add stuff here */
+		/* Add stuff here */
 
-	    default:
+	default:
 		kprintf("Unknown syscall %d\n", callno);
 		err = ENOSYS;
 		break;
 	}
-
 
 	if (err) {
 		/*
