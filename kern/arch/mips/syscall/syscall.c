@@ -126,9 +126,14 @@ syscall(struct trapframe *tf)
 
 		break;
 	case SYS_lseek:
-		err = (int)sys_lseek((int)tf->tf_a0,
-							 (off_t)tf->tf_a1,
+		err = sys_lseek((int)tf->tf_a0,
+							 (long)tf->tf_a1,
 							 (int)tf->tf_a2,
+							 &retval);
+
+		break;
+	case SYS_remove:
+		err = (int)sys_remove((const char *)tf->tf_a0,
 							 &retval);
 
 		break;

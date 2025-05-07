@@ -82,6 +82,7 @@ off_t sys_lseek(int fd, off_t pos, int whence, int *retval)
 	off_t eof;
 	lock_acquire(curproc->fd_lock[fd]);
 	struct vnode *v;
+	DEBUG(DB_GEN, "Lseek : fd %d -- pos %lld, whence : %d\n", fd, pos, whence);
 	/* TODO : Check Valid/inbounds fd */
 	v = (curproc)->fd_table[fd];
 	switch (whence) 
@@ -116,7 +117,12 @@ off_t sys_lseek(int fd, off_t pos, int whence, int *retval)
  * The name of the file referred to by pathname is removed from the filesystem. 
  * The actual file itself is not removed until no further references to it exist,
  *  whether those references are on disk or in memory.
+ * 
+ * TODO : Complete when handling the filesystem
  */
 int sys_remove(const char *pathname, int *retval){
-	
+	int err;
+	err = vfs_remove((char *)pathname);
+	*retval = 0;
+	return err;
 }
