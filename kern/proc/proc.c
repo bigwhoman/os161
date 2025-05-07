@@ -127,7 +127,7 @@ proc_create(const char *name)
 			}
 
 			/* Not really sure about my way of implementation */
-			proc->fd_pos[fd] = (unsigned int *)kmalloc(sizeof(unsigned int *));
+			proc->fd_pos[fd] = (off_t *)kmalloc(sizeof(off_t *));
 			*proc->fd_pos[fd] = 0;
 			proc -> fd_mode[fd] = -1;
 			proc -> fd_flags[fd] = -1;

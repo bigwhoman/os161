@@ -92,7 +92,7 @@ struct proc {
 										 * TODO 2 : add a locking system
 										*/
 	
-	unsigned int *fd_pos[MAX_FD]; /* Find Position To Write in File*/
+	off_t *fd_pos[MAX_FD]; /* Find Position To Write in File*/
 
 	struct lock *fd_lock[MAX_FD]; /* File Locks */
 

@@ -5,6 +5,7 @@
 #include <stat.h>
 #include <kern/seek.h>
 #include <vfs.h>
+#include <copyinout.h>
 
 /*
  * read reads up to buflen bytes from the file specified by fd, at the location in the file specified 
@@ -75,14 +76,14 @@ int sys_read(volatile int fd, void *buf, size_t buflen, int *retval)
  * 
  * Need checks for seek positions less than zero 
  */
-off_t sys_lseek(int fd, off_t pos, int whence, int *retval)
+off_t sys_lseek(int fd, off_t pos, int whence, int *retval1, int *retval)
 {
 	off_t err = 0;
 	struct stat *stat;
 	off_t eof;
 	lock_acquire(curproc->fd_lock[fd]);
+
 	struct vnode *v;
-	DEBUG(DB_GEN, "Lseek : fd %d -- pos %lld, whence : %d\n", fd, pos, whence);
 	/* TODO : Check Valid/inbounds fd */
 	v = (curproc)->fd_table[fd];
 	switch (whence) 
@@ -97,7 +98,7 @@ off_t sys_lseek(int fd, off_t pos, int whence, int *retval)
 		stat = kmalloc(sizeof(struct stat));
 		VOP_STAT(v, stat);
 		eof = stat -> st_size;
-		*curproc->fd_pos[fd] += (eof + pos);
+		*curproc->fd_pos[fd] = (eof + pos);
 		break;
 	default:
 		err = -1;
@@ -107,7 +108,8 @@ off_t sys_lseek(int fd, off_t pos, int whence, int *retval)
 	}
 	
 
-	*retval = *curproc->fd_pos[fd];
+	*retval = (int)(*curproc->fd_pos[fd] & 0xffffffff);
+	*retval1 = (int)((*curproc->fd_pos[fd]) >> 32);
 	lock_release(curproc->fd_lock[fd]);
 	return err;
 }
