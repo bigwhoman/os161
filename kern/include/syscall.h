@@ -69,7 +69,7 @@ int sys___time(userptr_t user_seconds, userptr_t user_nanoseconds);
 
 int sys_write(int fd, const void *buf, size_t buflen, int *retval);
 int sys_read(int fd, void *buf, size_t buflen, int *retval);
-off_t sys_lseek(int fd, off_t pos, int whence, int *retval1, int *retval);
+int sys_lseek(int fd, off_t pos, int whence, int *retval1, int *retval);
 int sys_remove(const char *pathname, int *retval);
 int sys_open(char *filename, int flags, mode_t mode, int *retval);
 int sys_exit(int status);

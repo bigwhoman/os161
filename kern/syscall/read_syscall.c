@@ -74,39 +74,53 @@ int sys_read(volatile int fd, void *buf, size_t buflen, int *retval)
  * 
  * 
  * 
- * Need checks for seek positions less than zero 
+ * TODO: ESPIPE error 
  */
-off_t sys_lseek(int fd, off_t pos, int whence, int *retval1, int *retval)
+int sys_lseek(int fd, off_t pos, int whence, int *retval1, int *retval)
 {
-	off_t err = 0;
+	int err = 0;
 	struct stat *stat;
-	off_t eof;
+	off_t eof, new_pos;
 	lock_acquire(curproc->fd_lock[fd]);
 
 	struct vnode *v;
 	/* TODO : Check Valid/inbounds fd */
 	v = (curproc)->fd_table[fd];
+	new_pos = *curproc->fd_pos[fd];
+	if (v == NULL){
+		*retval = -1;
+		err = EBADF;
+		lock_release(curproc->fd_lock[fd]);
+		return err;
+	}
 	switch (whence) 
 	{
 	case SEEK_SET: 
-		*curproc->fd_pos[fd] = pos;
+		new_pos = pos;
 		break;
 	case SEEK_CUR:
-		*curproc->fd_pos[fd] += pos;
+		new_pos += pos;
 		break;
 	case SEEK_END:
 		stat = kmalloc(sizeof(struct stat));
 		VOP_STAT(v, stat);
 		eof = stat -> st_size;
-		*curproc->fd_pos[fd] = (eof + pos);
+		new_pos = (eof + pos);
 		break;
 	default:
-		err = -1;
-		/* Need to set this accordingly */
-		*retval = EINVAL;
-		break;
+		*retval = -1;
+		err = EINVAL;
+		lock_release(curproc->fd_lock[fd]);
+		return err;
 	}
 	
+	if(new_pos < 0){
+		*retval = -1;
+		err = EINVAL;
+		lock_release(curproc->fd_lock[fd]);
+		return err;
+	}
+	*curproc -> fd_pos[fd] = new_pos;
 
 	*retval = (int)(*curproc->fd_pos[fd] & 0xffffffff);
 	*retval1 = (int)((*curproc->fd_pos[fd]) >> 32);
