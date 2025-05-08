@@ -14,7 +14,7 @@ RUN add-apt-repository ppa:ops-class/os161-toolchain && \
 WORKDIR /os161
 
 
-RUN echo '#!/bin/bash \n\
+RUN echo "#!/bin/bash \n\
 cd /os161/src \n\
 ./configure --ostree=/os161/root \n\
 cd kern/conf \n\
@@ -22,20 +22,20 @@ cd kern/conf \n\
 sleep 2 \n\
 cd /os161/src/kern/compile/ASST2 \n\
 bmake depend \n\
-sleep 2
+sleep 2 \n\
 bmake \n\
-sleep 1
+sleep 1 \n\
 bmake install \n\
-sleep 1
+sleep 1 \n\
 cd /os161/src \n\
 bmake depend \n\
-sleep 2
+sleep 2 \n\
 bmake \n\
-sleep 1
+sleep 1 \n\
 bmake install \n\
-sleep 1
+sleep 1 \n\
 cd /os161/root \n\
-' > /os161/setup_env.sh && \
+" > /os161/setup_env.sh && \
 chmod +x /os161/setup_env.sh
 
 CMD ["/bin/bash"]
