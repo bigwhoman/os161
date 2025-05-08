@@ -18,11 +18,11 @@ jobs:
       run: sleep 10
 
 
-    - name: Run Tests in Container
+    - name: Run Syscall Tests
       run : |
         docker run -v ${{github.workspace}}:/os161/src os161-test-env /bin/bash -c "
                   source /os161/setup_env.sh 
-                  test161 run syscalls/fileonlytest.t 
+                  test161 list tags syscalls | xargs -I {} test161 run {} 
                 "
 
     
