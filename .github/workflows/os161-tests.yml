@@ -6,7 +6,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
     - uses: actions/checkout@v3
@@ -18,6 +18,7 @@ jobs:
       run : |
         docker run -v ${{github.workspace}}:/os161/src os161-test-env /bin/bash -c "
                   cd /os161/src   
+                  ls
                   ./configure --ostree=/os161/root 
                   cd /os161/src/kern/conf 
                   ./config ASST2 
