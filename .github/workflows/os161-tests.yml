@@ -6,27 +6,40 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v3
 
-    - name: Build Docker Image
-      run: docker build -t os161-test-env .
+    - name: Install Buildtools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y software-properties-common
+        sudo add-apt-repository ppa:ops-class/os161-toolchain
+        sudo apt-get update
+        sudo apt-get install -y os161-toolchain
 
-    - name: Run Tests in Container
-      run : |
-        docker run -v ${{github.workspace}}:/os161/src os161-test-env /bin/bash -c "
-                  cd /os161/src   
-                  ./configure --ostree=/os161/root 
-                  cd /os161/src/kern/conf 
-                  ./config ASST2 
-                  cd /os161/src/kern/compile/ASST2 
-                  bmake depend && bmake && bmake install 
-                  cd /os161/src 
-                  bmake depend && bmake && bmake install 
-                  cd /os161/root
-                  test161 run syscalls/fileonlytest.t
-                "
+    - name: Build OS
+      run: |
+        ./configure --ostree=~/root
+        ./kern/conf/config ASST2
+        cd kern/compile/ASST2
+        bmake depend
+        bmake
+        bmake install
+        cd ~
+    
+    - name: Build Programs
+      run: |
+        bmake depend
+        bmake
+        bmake install
+        cd ~
+
+    - name: Run Tests 
+      run: |
+        cd ~/root
+        test161 run syscalls/fileonlytest.t
+
 
     
