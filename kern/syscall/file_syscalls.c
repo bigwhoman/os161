@@ -11,6 +11,12 @@
 
 
 /*
+ * 
+ * 
+ * open opens the file, device, or other kernel object named by the pathname filename.
+ * The flags argument specifies how to open the file. 
+ * The optional mode argument provides the file permissions
+ * 
  *  Checks TODO : 
  *      1. Process has the file already opened
  *      2. Errors are right  
@@ -20,11 +26,17 @@
 
 int sys_open(char *filename, int flags, mode_t mode, int *retval){ 
     struct vnode *v;
-    int ret;
-    ret = vfs_open(filename, flags, mode, &v);
-    if (ret > 0){
+    int err;
+	
+	if (filename == NULL){
+		err = ENODEV;
+		*retval = -1;
+		return err;
+	}
+    err = vfs_open(filename, flags, mode, &v);
+    if (err > 0){
         *retval = -1;
-        return ret;
+        return err;
     }
 
     /* Try to find an empty entry (this is not optimal) */
@@ -46,11 +58,15 @@ int sys_open(char *filename, int flags, mode_t mode, int *retval){
             curproc -> fd_flags[i] = flags;
             curproc -> fd_mode[i] = mode;
             lock_release(curproc->fd_lock[i]);
-            break;
+			return err;
         }
         lock_release(curproc->fd_lock[i]);
     }
-    return ret;
+
+	/* The processes file table was full */
+	*retval = -1;
+	err = EMFILE;	
+    return err;
 }
 
 
@@ -208,14 +224,7 @@ int sys_read(volatile int fd, void *buf, size_t buflen, int *retval)
 
 	*curproc->fd_pos[fd] += (buflen - u.uio_resid);
 	*retval = buflen - u.uio_resid;
-
-	if (err)
-	{
-		// This is a dummy code to avoid not used buflen, needs to be changed after all
-		lock_release(curproc->fd_lock[fd]);
-		buflen = -1;
-		return err;
-	}
+	
 	lock_release(curproc->fd_lock[fd]);
 	return 0;
 }
