@@ -16,6 +16,17 @@ jobs:
 
     - name: Run Tests in Container
       run : |
-        docker run -v ${{github.workspace}}:/os161/src os161-test-env /os161/run_tests.sh
+        docker run -v ${{github.workspace}}:/os161/src os161-test-env /bin/bash -c "
+                  cd /os161/src   
+                  ./configure --ostree=/os161/root 
+                  cd /os161/src/kern/conf 
+                  ./config ASST2 
+                  cd /os161/src/kern/compile/ASST2 
+                  bmake depend && bmake && bmake install 
+                  cd /os161/src 
+                  bmake depend && bmake && bmake install 
+                  cd /os161/root
+                  test161 run syscalls/fileonlytest.t
+                "
 
     
