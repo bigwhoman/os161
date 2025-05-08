@@ -15,7 +15,7 @@ jobs:
       run: docker build -t os161-test-env .
 
     - name: Setup Delay
-      run: sleep 2
+      run: sleep 10
 
 
     - name: Run Tests in Container
@@ -24,13 +24,26 @@ jobs:
                   cd /os161/src   
                   ls
                   ./configure --ostree=/os161/root 
+                  sleep 4
                   cd /os161/src/kern/conf 
                   ./config ASST2 
+                  sleep 4
                   cd /os161/src/kern/compile/ASST2 
-                  bmake depend && bmake && bmake install 
-                  cd /os161/src 
-                  bmake depend && bmake && bmake install 
+                  sleep 4
+                  bmake depend 
+                  sleep 1 
+                  bmake
+                  sleep 1 
+                  bmake install 
+                  cd /os161/src
+                  sleep 2
+                  bmake depend 
+                  sleep 2 
+                  bmake
+                  sleep 2
+                  bmake install 
                   cd /os161/root
+                  sleep 1
                   test161 run syscalls/fileonlytest.t
                 "
 
