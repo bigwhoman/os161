@@ -21,7 +21,7 @@ jobs:
     - name: Run Tests in Container
       run : |
         docker run -v ${{github.workspace}}:/os161/src os161-test-env /bin/bash -c "
-                  /os161/setup_env.sh 
+                  source /os161/setup_env.sh 
                   test161 run syscalls/fileonlytest.t 
                 "
 
