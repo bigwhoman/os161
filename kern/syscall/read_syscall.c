@@ -142,3 +142,37 @@ int sys_remove(const char *pathname, int *retval){
 	*retval = 0;
 	return err;
 }
+
+/*
+ *  clones the file handle identifed by file descriptor oldfd
+ *  onto the file handle identified by newfd. If newfd
+ *  names an already-open file, that file is closed.
+ *
+ *  
+ */
+int sys_dup2(int oldfd, int newfd, int *retval){
+  struct vnode* v;
+  int err, close_err, close_ret;
+  err = 0;
+  lock_acquire(curproc->fd_lock[oldfd]);
+  v = curproc->fd_table[oldfd];
+  if(v == NULL){
+    err = EBADF; 
+    *retval = -1; 
+    lock_release(curproc->fd_lock[oldfd]);
+    return err;
+  }
+  if(curproc->fd_table[newfd] != NULL){
+    close_err = sys_close(newfd, &close_ret);
+    if (close_err){
+      kprintf("Error in closing fd number : %d\n", newfd);
+    } 
+  }
+  curproc->fd_table[newfd] = curproc->fd_table[oldfd];
+  curproc->fd_lock[newfd] = curproc->fd_lock[oldfd];
+  curproc->fd_pos[newfd] = curproc->fd_pos[oldfd];
+  VOP_INCREF(curproc -> fd_table[newfd]);
+  *retval = newfd;
+  lock_release(curproc->fd_lock[oldfd]);
+  return err;
+}
