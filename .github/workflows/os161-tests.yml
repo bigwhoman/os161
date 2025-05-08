@@ -6,7 +6,7 @@ on:
 
 jobs:
   test:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
@@ -21,30 +21,8 @@ jobs:
     - name: Run Tests in Container
       run : |
         docker run -v ${{github.workspace}}:/os161/src os161-test-env /bin/bash -c "
-                  cd /os161/src   
-                  ls
-                  ./configure --ostree=/os161/root 
-                  sleep 4
-                  cd /os161/src/kern/conf 
-                  ./config ASST2 
-                  sleep 4
-                  cd /os161/src/kern/compile/ASST2 
-                  sleep 4
-                  bmake depend 
-                  sleep 1 
-                  bmake
-                  sleep 1 
-                  bmake install 
-                  cd /os161/src
-                  sleep 2
-                  bmake depend 
-                  sleep 2 
-                  bmake
-                  sleep 2
-                  bmake install 
-                  cd /os161/root
-                  sleep 1
-                  test161 run syscalls/fileonlytest.t
+                  /os161/setup_env.sh 
+                  test161 run syscalls/fileonlytest.t 
                 "
 
     
