@@ -205,13 +205,14 @@ proc_destroy(struct proc *proc)
 	KASSERT(proc != NULL);
 	KASSERT(proc != kproc);
 	// size_t i;
-
-    DEBUG(DB_PROC, "Proc Destroyed %p By %p\n", proc, curproc);
+	DEBUG(DB_PROC, "Proc Destroyed %p (%d) By %p (%d) \n", proc, proc -> pid, curproc, curproc->pid);
 	/*
 	 * We don't take p_lock in here because we must have the only
 	 * reference to this structure. (Otherwise it would be
 	 * incorrect to destroy it.)
 	 */
+	
+	
 
 	/* VFS fields */
 	if (proc->p_cwd) {
@@ -271,10 +272,11 @@ proc_destroy(struct proc *proc)
 	spinlock_cleanup(&proc->p_lock);
 
 	/* Empty Pid in pid bitmap */
-	lock_acquire(pid_lock);
+	
 	bitmap_unmark(pid_bitmap, proc->pid);
 	// array_remove(process_table, (unsigned int)proc->pid);
-	lock_release(pid_lock);
+	array_set(process_table, proc->pid, NULL);
+	
 
 
 	/* Destroy File Locks*/
@@ -309,7 +311,7 @@ void
 proc_bootstrap(void)
 {
 	pid_lock = lock_create("Pid Lock");
-	pid_bitmap = bitmap_create(MAX_PID);
+	pid_bitmap = bitmap_create(PID_MAX);
 	console_lock = lock_create("Console Lock");
 	/* TODO : Clean this before last process shutdown */
 	process_table = array_create();

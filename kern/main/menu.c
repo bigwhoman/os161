@@ -117,9 +117,11 @@ purge(){
 	size_t i;
 	for (i = 0; i < array_num(process_table); i++)
 	{
+		lock_acquire(pid_lock);
 		struct proc *proc = array_get(process_table, (unsigned int)i);	
 		if (proc != NULL && proc->exited == true)
 			proc_destroy(proc);
+		lock_release(pid_lock);
 	}	
 }
 

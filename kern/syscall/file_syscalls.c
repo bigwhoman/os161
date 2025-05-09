@@ -27,13 +27,22 @@
 int sys_open(char *filename, int flags, mode_t mode, int *retval){ 
     struct vnode *v;
     int err;
-	
-	if (filename == NULL){
-		err = ENODEV;
+	char *fname;
+	size_t got;
+	fname = kmalloc(PATH_MAX);
+	err = copyinstr((const_userptr_t)filename, fname, PATH_MAX, &got);
+	if(err){
+		kfree(fname);
 		*retval = -1;
 		return err;
 	}
-    err = vfs_open(filename, flags, mode, &v);
+	if (filename == NULL || got <= 0){
+		err = ENOENT;
+		*retval = -1;
+		return err;
+	}
+    err = vfs_open(fname, flags, mode, &v);
+	kfree(fname);
     if (err > 0){
         *retval = -1;
         return err;

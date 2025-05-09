@@ -96,7 +96,7 @@ int sys_wait(pid_t pid, int *status, int options, int *retval){
     struct proc *proc;
     proc = array_get(process_table, (unsigned int)pid);
 
-    DEBUG(DB_GEN, "Proc %p waiting on %p\n", curproc, proc);
+    DEBUG(DB_GEN, "Proc %p (%d) waiting on %p (%d) \n", curproc, curproc->pid, proc, proc->pid);
 
     if (proc == NULL){
         *retval = -1;
@@ -124,8 +124,10 @@ int sys_wait(pid_t pid, int *status, int options, int *retval){
     *retval = pid;
     while (proc->exited != true)
         cv_wait(curproc->cv, curproc->cv_lock);
-    proc_destroy(proc);
 
+	lock_acquire(pid_lock);	
+    proc_destroy(proc);
+	lock_release(pid_lock);	
     if (status != NULL){
         int encode = 0;
         switch(curproc->child_status){

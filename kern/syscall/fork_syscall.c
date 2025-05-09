@@ -28,7 +28,7 @@ int sys_fork(struct trapframe *tf, int *retval){
     memcpy(new_tf, tf, sizeof(*tf));
 
     newproc -> parent = curproc;
-    DEBUG(DB_GEN, "Proc Forked %p - Parent %p\n", newproc, curproc);
+    DEBUG(DB_GEN, "Proc Forked %p (%d) - Parent %p (%d) \n", newproc, newproc -> pid, curproc, curproc->pid);
     /* VFS fields */
 
     for (size_t i = 0; i < MAX_FD; i++)
@@ -63,8 +63,10 @@ int sys_fork(struct trapframe *tf, int *retval){
 			enter_forked_process /* thread function */,
 			new_tf /* thread arg */, 0 /* thread arg */);
 	if (result) {
-		kprintf("thread_fork failed: %s\n", strerror(result));
+		kprintf("thread_fork failed: %s\n", strerror(result)); 
+	    lock_acquire(pid_lock);	
 		proc_destroy(newproc);
+        lock_release(pid_lock);
         *retval = -1;
 		return result;
 	}

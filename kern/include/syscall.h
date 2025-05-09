@@ -40,6 +40,9 @@
 #include <synch.h>
 struct trapframe; /* from <machine/trapframe.h> */
 
+#define MAX_PATHNAME 128
+
+
 /*
  * The system call dispatcher.
  */

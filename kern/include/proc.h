@@ -41,6 +41,7 @@
 #include <synch.h>
 #include <bitmap.h>
 #include <array.h>
+#include <limits.h>
 
 struct addrspace;
 struct thread;
@@ -51,10 +52,8 @@ struct lock* pid_lock;
 struct bitmap* pid_bitmap;
 struct array* process_table;
 
-
-#define MAX_PID 2<<15
-#define MIN_PID 2
-#define MAX_FD 20 // Maximum amount of open files a process could have
+/* TODO: Change this instance */
+#define MAX_FD OPEN_MAX // Maximum amount of open files a process could have
 /*
  * Process structure.
  *
