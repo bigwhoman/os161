@@ -8,7 +8,11 @@
 #include <vfs.h>
 #include <copyinout.h>
 
-
+/*
+ *
+ * 
+ * TODO: Change the fd system to be lazy !!!!!
+ */
 
 /*
  * 
@@ -87,7 +91,7 @@ int sys_open(char *filename, int flags, mode_t mode, int *retval){
 int sys_close(int fd, int *retval){
 	int err;
 	err = 0;
-	if (fd < 0 || fd > MAX_FD)
+	if (fd < 0 || fd >= MAX_FD)
 	{
 		err = EBADF;
 		*retval = -1;
@@ -142,7 +146,7 @@ int sys_close(int fd, int *retval){
 int sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
     int err;
 
-	if (fd < 0 || fd > MAX_FD)
+	if (fd < 0 || fd >= MAX_FD)
 	{
 		err = EBADF;
 		*retval = -1;
@@ -200,7 +204,7 @@ int sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
 int sys_read(volatile int fd, void *buf, size_t buflen, int *retval)
 {
 	int err = 0;
-	if (fd < 0 || fd > MAX_FD)
+	if (fd < 0 || fd >= MAX_FD)
 	{
 		err = EBADF;
 		*retval = -1;
@@ -250,7 +254,7 @@ int sys_lseek(int fd, off_t pos, int whence, int *retval1, int *retval)
 	struct stat *stat;
 	off_t eof, new_pos;
 	mode_t file_type;
-	if (fd < 0 || fd > MAX_FD) 
+	if (fd < 0 || fd >= MAX_FD) 
 	{
 		err = EBADF;
 		*retval = -1;
@@ -344,8 +348,8 @@ int sys_dup2(int oldfd, int newfd, int *retval){
   struct vnode* v;
   int err, close_err, close_ret;
   err = 0;
-  if (oldfd < 0 || oldfd > MAX_FD ||
-		 newfd < 0 || newfd > MAX_FD)
+  if (oldfd < 0 || oldfd >= MAX_FD ||
+		 newfd < 0 || newfd >= MAX_FD)
   {
 	  err = EBADF;
 	  *retval = -1;
