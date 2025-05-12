@@ -77,6 +77,7 @@ int sys_remove(const char *pathname, int *retval);
 int sys_open(char *filename, int flags, mode_t mode, int *retval);
 int sys_exit(int status);
 int sys_dup2(int oldfd, int newfd, int *retval);
+int sys_fstat(int fd, struct stat *statbuf, int *retval);
 int sys_execv(const char *program, char **args, int *retval);
 int sys_wait(pid_t pid, int *status, int options, int *retval);
 int sys_close(pid_t pid, int *retval);

@@ -348,13 +348,14 @@ int sys_dup2(int oldfd, int newfd, int *retval){
   struct vnode* v;
   int err, close_err, close_ret;
   err = 0;
+  
   if (oldfd < 0 || oldfd >= MAX_FD ||
 		 newfd < 0 || newfd >= MAX_FD)
   {
 	  err = EBADF;
 	  *retval = -1;
 	  return err;
-  }
+  } 
   lock_acquire(curproc->fd_lock[oldfd]);
   v = curproc->fd_table[oldfd];
   if(v == NULL){
@@ -362,6 +363,12 @@ int sys_dup2(int oldfd, int newfd, int *retval){
     *retval = -1; 
     lock_release(curproc->fd_lock[oldfd]);
     return err;
+  }
+  if (newfd == oldfd)
+  {
+	  lock_release(curproc->fd_lock[oldfd]);
+	  *retval = newfd;
+	  return err;
   }
   if(curproc->fd_table[newfd] != NULL){
     close_err = sys_close(newfd, &close_ret);
@@ -376,4 +383,51 @@ int sys_dup2(int oldfd, int newfd, int *retval){
   *retval = newfd;
   lock_release(curproc->fd_lock[oldfd]);
   return err;
+}
+
+
+
+/*
+ * Retreives status information about the file referred to by the
+ * file descriptor fd and stores it in the stat structure pointed
+ * to by statbuf. 
+ * 
+ * TODO: Not sure about stability tests
+ */
+int sys_fstat(int fd, struct stat *statbuf, int *retval){
+	int err = 0;
+	struct stat *stat;
+	if (fd < 0 || fd >= MAX_FD)
+	{
+		err = EBADF;
+		*retval = -1;
+		return err;
+	}
+	lock_acquire(curproc->fd_lock[fd]);
+
+	struct vnode *v;
+	v = (curproc)->fd_table[fd];
+	/* Check for valid file*/
+	if (v == NULL)
+	{
+		*retval = -1;
+		err = EBADF;
+		lock_release(curproc->fd_lock[fd]);
+		return err;
+	}
+
+	/* Get file stats */
+	stat = kmalloc(sizeof(struct stat));
+	VOP_STAT(v, stat);
+	err = copyout((void *)stat, (userptr_t)statbuf, sizeof(struct stat));
+	if (err){
+		*retval = -1;
+		err = EFAULT;
+		lock_release(curproc->fd_lock[fd]);
+		return err;
+	}
+
+	*retval = 0;
+	lock_release(curproc->fd_lock[fd]);
+	return err;
 }
