@@ -119,18 +119,19 @@ proc_create(const char *name)
 				proc->fd_table[fd] = stdio_vnode;
 				*proc->fd_count[fd] += 1;
 				proc -> fd_lock[fd] = console_lock;
+				proc->fd_flags[fd] = flag;
 			}
 			else
 			{
 				proc->fd_table[fd] = NULL;
 				proc->fd_lock[fd] = lock_create("FD Lock");
+				proc->fd_flags[fd] = 0;
 			}
 
 			/* Not really sure about my way of implementation */
 			proc->fd_pos[fd] = (off_t *)kmalloc(sizeof(off_t *));
 			*proc->fd_pos[fd] = 0;
-			proc -> fd_mode[fd] = -1;
-			proc -> fd_flags[fd] = -1;
+			proc -> fd_mode[fd] = -1;	
 			proc -> fd_path[fd] = NULL;
 		}
 	proc->child_status = 0;

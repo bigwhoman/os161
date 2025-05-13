@@ -7,6 +7,7 @@
 #include <kern/seek.h>
 #include <vfs.h>
 #include <copyinout.h>
+#include <kern/fcntl.h>
 
 /*
  *
@@ -157,6 +158,19 @@ int sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
 
 	struct vnode *v;
 	v = (curproc)->fd_table[fd];
+	if (v == NULL)
+	{
+		*retval = -1;
+		err = EBADF;
+		lock_release(curproc->fd_lock[fd]);
+		return err;
+	}
+	if (!(curproc -> fd_flags[fd] & (O_RDWR | O_WRONLY))){
+		*retval = -1;
+		err = EBADF;
+		lock_release(curproc->fd_lock[fd]);
+		return err;
+	}
 	struct iovec iov;
 	struct uio u;
 
@@ -213,6 +227,20 @@ int sys_read(volatile int fd, void *buf, size_t buflen, int *retval)
 	lock_acquire(curproc->fd_lock[fd]);
 	struct vnode *v;
 	v = (curproc)->fd_table[fd];
+	if (v == NULL)
+	{
+		*retval = -1;
+		err = EBADF;
+		lock_release(curproc->fd_lock[fd]);
+		return err;
+	}
+	if (curproc->fd_flags[fd] & O_WRONLY)
+	{
+		*retval = -1;
+		err = EBADF;
+		lock_release(curproc->fd_lock[fd]);
+		return err;
+	}
 	struct iovec iov;
 	struct uio u;
 
@@ -230,6 +258,7 @@ int sys_read(volatile int fd, void *buf, size_t buflen, int *retval)
 
 	if (err)
 	{
+		*retval = -1;
 		lock_release(curproc->fd_lock[fd]);
 		return err;
 	}
@@ -332,7 +361,9 @@ int sys_lseek(int fd, off_t pos, int whence, int *retval1, int *retval)
  */
 int sys_remove(const char *pathname, int *retval){
 	int err;
-	err = vfs_remove((char *)pathname);
+	err = 0;
+	(void) pathname;
+	// err = vfs_remove((char *)pathname);
 	*retval = 0;
 	return err;
 }

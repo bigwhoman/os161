@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  Synch Tests:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,16 +25,43 @@ jobs:
         source /os161/setup_env.sh 
         test161 list tags synch | xargs -I {} test161 run {} 
         "
-    - name: Run Syscall Tests
-      run : |
-        docker run -v ${{github.workspace}}:/os161/src os161-test-env /bin/bash -c "
-        source /os161/setup_env.sh 
-        test161 list tags syscalls | xargs -I {} test161 run {} 
-        "
-    - name: Run Stability Tests
-      run : |
-        docker run -v ${{github.workspace}}:/os161/src os161-test-env /bin/bash -c "
-        source /os161/setup_env.sh 
-        test161 list tags stability  | xargs -I {} test161 run {} 
-        "
 
+  Syscall Tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build Docker Image
+        run: docker build -t os161-test-env .
+
+        # TODO: Not a robust way to check health, need to be changed
+      - name: Setup Delay
+        run: sleep 10
+
+      - name: Run Syscall Tests
+        run : |
+          docker run -v ${{github.workspace}}:/os161/src os161-test-env /bin/bash -c "
+          source /os161/setup_env.sh 
+          test161 list tags syscalls | xargs -I {} test161 run {} 
+          "
+
+  Stability Tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build Docker Image
+        run: docker build -t os161-test-env .
+
+        # TODO: Not a robust way to check health, need to be changed
+      - name: Setup Delay
+        run: sleep 10
+ 
+      - name: Run Stability Tests
+        run : |
+          docker run -v ${{github.workspace}}:/os161/src os161-test-env /bin/bash -c "
+          source /os161/setup_env.sh 
+          test161 list tags stability  | xargs -I {} test161 run {} 
+          "
