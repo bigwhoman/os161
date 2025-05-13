@@ -21,25 +21,50 @@ int sys_execv(const char *program, char *argv[], int *retval){
     int err;
     int argc;
     size_t i, all;
-    char *argin; 
     char prog[PATH_MAX];
     size_t got;
 	as = NULL;
+    char *argin;
 	argc = 0;
+    got = 0;
     
-
-	old_as = curproc ->p_addrspace;
+    old_as = curproc ->p_addrspace;
     if (argv == NULL)
     {
         err = EFAULT;
         *retval = -1;
         return err;
     }
+    int left = ARG_MAX;
+    int *argloc;
+    argloc = kmalloc(sizeof(int*));
 
+    argin = kmalloc(left);
     for (size_t i = 0; ; i++)
 	{
-        argin = kmalloc(PATH_MAX);
-        err = copyinstr((const_userptr_t)(argv + i), argin, PATH_MAX, &got);
+        
+        err = copyin((const_userptr_t)(argv + i), argloc, sizeof(int *));
+        if (*argloc == 0x0){
+            /* For some reason the tester fails because of this but works 
+             * properly when I test it :/
+             */
+            kfree(argin);
+            break;
+        }
+        if (err)
+        {
+            kfree(argin);
+            *retval = -1;
+            return err;
+        }
+        if (argloc == NULL)
+        {
+            err = ENOENT;
+            kfree(argin);
+            *retval = -1;
+            return err;
+        }
+        err = copyinstr((const_userptr_t)(*argloc), argin, left, &got);
         if (err)
         {
             kfree(argin);
@@ -48,16 +73,21 @@ int sys_execv(const char *program, char *argv[], int *retval){
         }
         if (argin == NULL || got <= 0)
         {
+            kfree(argin);
             err = ENOENT;
             *retval = -1;
             return err;
         }
-       
-        kfree(argin);
-        if(*(argv + i) == NULL)
-			break;
-		argc++;
+        left -= got;
+        if (left < 0){
+            *retval = -1;
+            kfree(argin);
+            err = E2BIG;
+            return err;
+        }
+
         
+        argc++;   
 	}
     
 	all = 0;
@@ -65,20 +95,6 @@ int sys_execv(const char *program, char *argv[], int *retval){
 	/* Copy the arguments from old stack */
 	for (i = 0; i < (size_t)argc; i++)
 	{
-        argin = kmalloc(PATH_MAX);
-        err = copyinstr((const_userptr_t)(argv[i]), argin, PATH_MAX, &got);
-        if (err)
-        {
-            kfree(argin);
-            *retval = -1;
-            return err;
-        }
-        if (argin == NULL || got <= 0)
-        {
-            err = ENOENT;
-            *retval = -1;
-            return err;
-        }
         /* Need kfree but somehow test fails when we do kfree here :/// */  
 		all += strlen(argv[i]) + 1;
 	}
