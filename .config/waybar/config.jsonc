@@ -94,7 +94,7 @@
     "rewrite": {
       // Desktop
       "": 
-        "<span foreground='#458588'> </span> Hyprland",
+        "<span foreground='#1e66f5'> </span> Hyprland",
 
       // Terminal
       "~": "  Terminal",
@@ -104,49 +104,49 @@
       // Browser
 
       "(.*)Mozilla Firefox": 
-        "<span foreground='#cc241d'>󰈹 </span> Firefox",
+        "<span foreground='#d20f39'>󰈹 </span> Firefox",
       "(.*) — Mozilla Firefox": 
-        "<span foreground='#cc241d'>󰈹 </span> $1",
+        "<span foreground='#d20f39'>󰈹 </span> $1",
 
       "(.*)Zen Browser": 
-        "<span foreground='#d65d0e'>󰺕 </span> Zen Browser",
+        "<span foreground='#fe640b'>󰺕 </span> Zen Browser",
       "(.*) — Zen Browser": 
-        "<span foreground='#d65d0e'>󰺕 </span> $1",
+        "<span foreground='#fe640b'>󰺕 </span> $1",
 
       // Development
 
       "(.*) - Visual Studio Code": 
-        "<span foreground='#458588'>󰨞 </span> $1",
+        "<span foreground='#1e66f5'>󰨞 </span> $1",
       "(.*)Visual Studio Code": 
-        "<span foreground='#458588'>󰨞 </span> Visual Studio Code",
+        "<span foreground='#1e66f5'>󰨞 </span> Visual Studio Code",
 
       "nvim": 
-        "<span foreground='#98971a'> </span> Neovim",
+        "<span foreground='#40a02b'> </span> Neovim",
       "nvim (.*)": 
-        "<span foreground='#98971a'> </span> $1",
+        "<span foreground='#40a02b'> </span> $1",
 
       "vim": 
-        "<span foreground='#98971a'> </span> Vim",
+        "<span foreground='#40a02b'> </span> Vim",
       "vim (.*)": 
-        "<span foreground='#98971a'> </span> $1",
+        "<span foreground='#40a02b'> </span> $1",
 
       // Media
 
       "(.*)Spotify": 
-        "<span foreground='#98971a'> </span> Spotify",
+        "<span foreground='#40a02b'> </span> Spotify",
       "(.*)Spotify Premium": 
-        "<span foreground='#98971a'> </span> Spotify Premium",
+        "<span foreground='#40a02b'> </span> Spotify Premium",
 
       "OBS(.*)": 
-        "<span foreground='#d5c4a1'> </span> OBS Studio",
+        "<span foreground='#6c6f85'> </span> OBS Studio",
 
       "VLC media player": 
-        "<span foreground='#d65d0e'>󰕼 </span> VLC Media Player",
+        "<span foreground='#fe640b'>󰕼 </span> VLC Media Player",
       "(.*) - VLC media player": 
-        "<span foreground='#d65d0e'>󰕼 </span> $1",
+        "<span foreground='#fe640b'>󰕼 </span> $1",
 
       "(.*) - mpv": 
-        "<span foreground='#b16286'> </span> $1",
+        "<span foreground='#8839ef'> </span> $1",
 
       "qView": "  qView",
 
@@ -157,25 +157,25 @@
       // Social
 
       "vesktop": 
-        "<span foreground='#458588'> </span> Discord",
+        "<span foreground='#1e66f5'> </span> Discord",
 
       "• Discord(.*)": "Discord$1",
       "(.*)Discord(.*)": 
-        "<span foreground='#458588'> </span> $1Discord$2",
+        "<span foreground='#1e66f5'> </span> $1Discord$2",
 
       // Documents
 
       "ONLYOFFICE Desktop Editors": 
-        "<span foreground='#cc241d'> </span> OnlyOffice Desktop",
+        "<span foreground='#d20f39'> </span> OnlyOffice Desktop",
 
       "(.*).docx": 
-        "<span foreground='#458588'> </span> $1.docx",
+        "<span foreground='#1e66f5'> </span> $1.docx",
       "(.*).xlsx": 
-        "<span foreground='#98971a'> </span> $1.xlsx",
+        "<span foreground='#40a02b'> </span> $1.xlsx",
       "(.*).pptx": 
-        "<span foreground='#d65d0e'> </span> $1.pptx",
+        "<span foreground='#fe640b'> </span> $1.pptx",
       "(.*).pdf": 
-        "<span foreground='#cc241d'> </span> $1.pdf",
+        "<span foreground='#d20f39'> </span> $1.pdf",
 
       // System
       "Authenticate": "  Authenticate"
@@ -214,7 +214,7 @@
   },
 
   "custom/distro": {
-    "format": "❄ ",
+    "format": "❄ ",   
     "tooltip": false
   },
 
@@ -249,11 +249,11 @@
 
       "format": {
         "months": 
-          "<span color='#928374'><b>{}</b></span>",
+          "<span color='#7287fd'><b>{}</b></span>",
         "weekdays": 
-          "<span color='#d5c4a1' font='7'>{}</span>",
+          "<span color='#6c6f85' font='7'>{}</span>",
         "today": 
-          "<span color='#cc241d'><b>{}</b></span>"
+          "<span color='#d20f39'><b>{}</b></span>"
       }
     },
 
@@ -317,11 +317,11 @@
 
     "player-icons": {
       "default": "󰝚 ",
-      "spotify": "<span foreground='#98971a'>󰓇 </span>",
-      "firefox": "<span foreground='#cc241d'>󰗃 </span>"
+      "spotify": "<span foreground='#40a02b'>󰓇 </span>",
+      "firefox": "<span foreground='#d20f39'>󰗃 </span>"
     },
     "status-icons": {
-      "paused": "<span color='#928374'>\u200A\u200A󰏤\u2009\u2009</span>"
+      "paused": "<span color='#7287fd'>\u200A\u200A󰏤\u2009\u2009</span>"
     },
 
     "tooltip-format": "Playing: {title} - {artist}",
