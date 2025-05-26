@@ -84,6 +84,36 @@
 #define USERSTACK     USERSPACETOP
 
 /*
+ * Coremap entry struct
+ */
+
+struct coremap_entry {
+	/* Is the frame allocated or not */
+	unsigned int allocated:1;
+
+	/* Is it Owned by the kernel*/
+	unsigned int kernel:1;
+
+	/* Owner PID*/
+	unsigned int owner:16;
+
+	/* Reference Counter*/
+	unsigned int reference_count:8;
+
+	/* Next Free Index*/
+	unsigned int next_free:16;
+	
+	/* Last Acess Timestamp - Used for LRU */
+	unsigned int last_access:16;
+};
+
+struct coremap_entry* coremap;
+size_t first_free_page;
+size_t total_free_pages;
+size_t total_pages;
+size_t first_page_paddr;
+
+/*
  * Interface to the low-level module that looks after the amount of
  * physical memory we have.
  *
