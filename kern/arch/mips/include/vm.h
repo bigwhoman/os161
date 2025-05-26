@@ -66,6 +66,7 @@
  * a valid address, and will make a *huge* mess if you scribble on it.
  */
 #define PADDR_TO_KVADDR(paddr) ((paddr)+MIPS_KSEG0)
+#define KVADDR_TO_PADDR(vaddr) ((vaddr)-MIPS_KSEG0)
 
 /*
  * The top of user space. (Actually, the address immediately above the
@@ -105,6 +106,11 @@ struct coremap_entry {
 	
 	/* Last Acess Timestamp - Used for LRU */
 	unsigned int last_access:16;
+
+	/* Allocation Size */
+	unsigned int allocation_size:13;
+
+	unsigned int start:1;
 };
 
 struct coremap_entry* coremap;

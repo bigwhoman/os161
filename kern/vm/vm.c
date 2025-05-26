@@ -108,12 +108,14 @@ vaddr_t alloc_kpages(unsigned npages){
         if (curthread != NULL && curproc != NULL)
             coremap[page + i].owner = (unsigned int)(curproc->pid);
         coremap[page + i].reference_count += 1;
+        coremap[page + i].allocation_size = npages;
         coremap[page + i].next_free = coremap[page + npages -1].next_free;
         
 
         /* TODO: Need to fix this timestamp*/
         coremap[page + i].last_access = 1000;
     }
+    coremap[page].start = 1;
     
     paddr_t page_paddr;
     page_paddr = first_page_paddr + page * PAGE_SIZE;
@@ -122,7 +124,40 @@ vaddr_t alloc_kpages(unsigned npages){
     return PADDR_TO_KVADDR(page_paddr);
 }
 void free_kpages(vaddr_t addr){
-    (void) addr;
+    spinlock_acquire(&coremap_lock);
+    size_t page_paddr,page,i;
+    /* Hope this doesnt wrongly align */
+    if ((addr & PAGE_FRAME) != addr) {
+        panic("free_kpages: address 0x%x is not page-aligned", addr);
+    }
+    page_paddr = KVADDR_TO_PADDR(addr);
+    page = (page_paddr - first_page_paddr)/PAGE_SIZE;
+    if (!coremap[page].start){
+        panic("Tried freeing non-start page");
+    }
+    /* TODO: Check the owner and pid */
+    for (i = 0; i < coremap[page].allocation_size; i++)
+    {
+        if (!coremap[page+i].allocated)
+        {
+            panic("Tried freeing non-start page");
+        }
+
+        /* TODO: Make this reference counting based !!! */
+        coremap[page + i].allocated = 0;
+        coremap[page + i].kernel = 0;
+        if (curthread != NULL && curproc != NULL)
+            coremap[page + i].owner = 0;
+        coremap[page + i].reference_count -= 1;
+        coremap[page + i].allocation_size = 0;
+        /* TODO: Need to fix for last page */
+        coremap[page + i].next_free = page + i + 1;
+        
+
+        /* TODO: Need to fix this timestamp*/
+        coremap[page + i].last_access = 1000;
+    }
+    spinlock_release(&coremap_lock);
     return;
 }
 
