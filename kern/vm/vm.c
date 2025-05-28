@@ -24,6 +24,10 @@ void init_coremap(paddr_t start_paddr, size_t num_pages){
         coremap[i].reference_count = 0;
         coremap[i].owner = 0;
         coremap[i].last_access = 0;
+        coremap[i].end = 0;
+        coremap[i].start = 0;
+        coremap[i.next_allocated = 0;
+        page = next_page;d]
         if (i < num_pages - 1)
             coremap[i].next_free = i + 1;
         else 
@@ -84,48 +88,99 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
 vaddr_t alloc_kpages(unsigned npages){
     spinlock_acquire(&coremap_lock);
     size_t aquired_pages,page,i;
+    size_t starting_page,ending_page,prev_free_page;
     aquired_pages = 0;
+    size_t max_found;
+    max_found = 0; /* variable used for debugging purposes */
+    prev_free_page = 0;
+
+    /*
+     * Search the whole coremap for free pages
+     * Our priority is to find consequtive pages 
+     * If no consequtive pages are found just take 
+     * the first n free pages
+     */
     for (page = 0; page < total_pages; page++)
     {
+        if (page < total_pages - 1){
+            if (!coremap[page + 1].allocated)
+                coremap[page].next_free = page + 1;
+        } else {
+            
+        }
+
+
         if (!coremap[page].allocated){
-            aquired_pages += 1; 
+            prev_free_page = page;
+            aquired_pages += 1;
+            if (max_found < 1)
+                first_free_page = page;
+            if (max_found < npages)
+                max_found += 1;
         } else {
             aquired_pages = 0;
         }
         if (aquired_pages == npages){
-            page = page - (npages - 1);
+            ending_page = page;
+            starting_page = page - (npages - 1);
             break;
         }
+        if (max_found == npages){
+            ending_page = page;
+            starting_page = first_free_page;
+        }
     }
-    if (aquired_pages == 0){
+
+    /* Make sure we have enough pages left to allocate !!*/
+    if (max_found < npages)
+    {
+        /* TODO: fix this when fixing swap*/
+        panic("not enough memory !!! -- max found : %d !!!!", max_found);
         spinlock_release(&coremap_lock);
         return 0;
     }
-    for (i = 0; i < aquired_pages; i++)
+
+    /* Set start and end of our allocation */
+    coremap[starting_page].start = 1;
+    coremap[ending_page].end = 1;
+
+    /* start the allocation */
+    page = starting_page;
+    for (i = 0; i < npages; i++)
     {
-        coremap[page + i].allocated = 1;
-        coremap[page + i].kernel = 1;
+        coremap[page].allocated = 1;
+        coremap[page].kernel = 1;
         if (curthread != NULL && curproc != NULL)
-            coremap[page + i].owner = (unsigned int)(curproc->pid);
-        coremap[page + i].reference_count += 1;
-        coremap[page + i].allocation_size = npages;
-        coremap[page + i].next_free = coremap[page + npages -1].next_free;
-        
+            coremap[page].owner = (unsigned int)(curproc->pid);
+        coremap[page].reference_count += 1;
+        coremap[page].allocation_size = npages;
 
         /* TODO: Need to fix this timestamp*/
-        coremap[page + i].last_access = 1000;
-    }
-    coremap[page].start = 1;
-    
+        coremap[page].last_access = 1000;
+
+        /* 
+         * Make sure we are not in the end of allocation 
+         * set the next allocated as the next free 
+         */
+        if (!coremap[page].end){
+            coremap[page].next_allocated = coremap[page].next_free;
+            coremap[page].next_free = coremap[ending_page].next_free;
+            page = coremap[page].next_allocated;
+        }
+
+    } 
+
     paddr_t page_paddr;
-    page_paddr = first_page_paddr + page * PAGE_SIZE;
+    page_paddr = first_page_paddr + starting_page * PAGE_SIZE;
     
     spinlock_release(&coremap_lock);
     return PADDR_TO_KVADDR(page_paddr);
 }
+
+
 void free_kpages(vaddr_t addr){
     spinlock_acquire(&coremap_lock);
-    size_t page_paddr,page,i;
+    size_t page_paddr,page,i,next_page;
     /* Hope this doesnt wrongly align */
     if ((addr & PAGE_FRAME) != addr) {
         panic("free_kpages: address 0x%x is not page-aligned", addr);
@@ -136,26 +191,33 @@ void free_kpages(vaddr_t addr){
         panic("Tried freeing non-start page");
     }
     /* TODO: Check the owner and pid */
+    next_page = page;
     for (i = 0; i < coremap[page].allocation_size; i++)
     {
-        if (!coremap[page+i].allocated)
+        if (!coremap[page].allocated)
         {
             panic("Tried freeing non-start page");
         }
 
         /* TODO: Make this reference counting based !!! */
-        coremap[page + i].allocated = 0;
-        coremap[page + i].kernel = 0;
+        coremap[page].allocated = 0;
+        coremap[page].kernel = 0;
         if (curthread != NULL && curproc != NULL)
-            coremap[page + i].owner = 0;
-        coremap[page + i].reference_count -= 1;
-        coremap[page + i].allocation_size = 0;
-        /* TODO: Need to fix for last page */
-        coremap[page + i].next_free = page + i + 1;
-        
+            coremap[page].owner = 0;
+        coremap[page].reference_count -= 1;
+        coremap[page].allocation_size = 0;
 
+        /* TODO: Need to fix for last page */
+        coremap[page].next_free = page + i + 1;
+    
         /* TODO: Need to fix this timestamp*/
-        coremap[page + i].last_access = 1000;
+        coremap[page].last_access = 1000;
+
+
+        next_page = coremap[page].next_allocated;
+        coremap[page].start = 0;
+        coremap[page].next_allocated = 0; 
+        page = next_page;
     }
     spinlock_release(&coremap_lock);
     return;

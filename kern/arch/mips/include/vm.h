@@ -111,6 +111,11 @@ struct coremap_entry {
 	unsigned int allocation_size:13;
 
 	unsigned int start:1;
+
+	unsigned int end:1;
+
+	unsigned int next_allocated:16;
+
 };
 
 struct coremap_entry* coremap;

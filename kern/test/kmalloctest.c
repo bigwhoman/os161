@@ -350,6 +350,7 @@ kmalloctest4thread(void *sm, unsigned long num)
 		// Write to each page of the allocated memory and make sure nothing
 		// overwrites it.
 		for (k = 0; k < sizes[p]; k++) {
+			DEBUG(DB_GEN, "p : %x, koo : %x\n", p, k*PAGE_SIZE/sizeof(uint32_t));
 			*((uint32_t *)ptrs[p] + k*PAGE_SIZE/sizeof(uint32_t)) = magic;
 		}
 
