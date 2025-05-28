@@ -19,23 +19,23 @@ void init_coremap(paddr_t start_paddr, size_t num_pages){
 
     for (i = 0; i < num_pages; i++)
     {
-        coremap[i].allocated = 0;
-        coremap[i].kernel = 0;
-        coremap[i].reference_count = 0;
-        coremap[i].owner = 0;
-        coremap[i].last_access = 0;
-        coremap[i].end = 0;
-        coremap[i].start = 0;
-        coremap[i.next_allocated = 0;
-        page = next_page;d]
+        coremap[start_page + i].allocated = 0;
+        coremap[start_page + i].kernel = 0;
+        coremap[start_page + i].reference_count = 0;
+        coremap[start_page + i].owner = 0;
+        coremap[start_page + i].last_access = 0;
+        coremap[start_page + i].end = 0;
+        coremap[start_page + i].start = 0;
+        coremap[start_page + i].next_allocated = 0;
         if (i < num_pages - 1)
-            coremap[i].next_free = i + 1;
+            coremap[start_page + i].next_free = start_page + i + 1;
         else 
-            coremap[i].next_free = 0;
+            coremap[start_page + i].next_free = start_page;
     }
 
     
     first_free_page = start_page;
+    first_page = start_page;
     first_page_paddr = start_paddr;
     total_free_pages = num_pages;
     total_pages = num_pages;
@@ -87,44 +87,47 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
  */
 vaddr_t alloc_kpages(unsigned npages){
     spinlock_acquire(&coremap_lock);
-    size_t aquired_pages,page,i;
-    size_t starting_page,ending_page,prev_free_page;
-    aquired_pages = 0;
+    size_t page,i;
+    size_t starting_page,ending_page;
     size_t max_found;
+    int p_num;
     max_found = 0; /* variable used for debugging purposes */
-    prev_free_page = 0;
+    ending_page = 0;
+    starting_page = first_page;
 
     /*
      * Search the whole coremap for free pages
      * Our priority is to find consequtive pages 
-     * If no consequtive pages are found just take 
+     * If no consequtive pages are found just take
      * the first n free pages
+     * 
+     * UPDATE: Changed the system to find the n first free pages.
+     * will probably change this since I think it adds slowdown(not sure)
      */
-    for (page = 0; page < total_pages; page++)
+    for (page = first_page; page < total_pages; page++)
     {
-        if (page < total_pages - 1){
-            if (!coremap[page + 1].allocated)
-                coremap[page].next_free = page + 1;
-        } else {
-            
-        }
-
-
         if (!coremap[page].allocated){
-            prev_free_page = page;
-            aquired_pages += 1;
+            // /* is set to be deleted*/
+            // if (page == 0){
+            //     coremap[total_pages - 1].next_free = page;
+            // } else {
+            //     coremap[page - 1].next_free = page;
+            // }
+            // /**/
+            // aquired_pages += 1;
             if (max_found < 1)
                 first_free_page = page;
             if (max_found < npages)
                 max_found += 1;
-        } else {
-            aquired_pages = 0;
         }
-        if (aquired_pages == npages){
-            ending_page = page;
-            starting_page = page - (npages - 1);
-            break;
-        }
+        // } else {
+        //     aquired_pages = 0;
+        // }
+        // if (aquired_pages == npages){
+        //     ending_page = page;
+        //     starting_page = page - (npages - 1);
+        //     break;
+        // }
         if (max_found == npages){
             ending_page = page;
             starting_page = first_free_page;
@@ -148,6 +151,7 @@ vaddr_t alloc_kpages(unsigned npages){
     page = starting_page;
     for (i = 0; i < npages; i++)
     {
+        p_num = page;
         coremap[page].allocated = 1;
         coremap[page].kernel = 1;
         if (curthread != NULL && curproc != NULL)
@@ -157,6 +161,16 @@ vaddr_t alloc_kpages(unsigned npages){
 
         /* TODO: Need to fix this timestamp*/
         coremap[page].last_access = 1000;
+
+        /*
+         * Fix previous pages that have this page as their next free page
+         */
+        while(true){
+            p_num = p_num - 1 < (int)first_page ? (int)total_pages - 1 : p_num - 1;
+            coremap[p_num].next_free = coremap[ending_page].next_free;
+            if (!coremap[p_num].allocated || coremap[p_num].next_allocated == page)
+                break;
+        }
 
         /* 
          * Make sure we are not in the end of allocation 
@@ -181,6 +195,7 @@ vaddr_t alloc_kpages(unsigned npages){
 void free_kpages(vaddr_t addr){
     spinlock_acquire(&coremap_lock);
     size_t page_paddr,page,i,next_page;
+    int p_num;
     /* Hope this doesnt wrongly align */
     if ((addr & PAGE_FRAME) != addr) {
         panic("free_kpages: address 0x%x is not page-aligned", addr);
@@ -194,9 +209,10 @@ void free_kpages(vaddr_t addr){
     next_page = page;
     for (i = 0; i < coremap[page].allocation_size; i++)
     {
+        p_num = page;
         if (!coremap[page].allocated)
         {
-            panic("Tried freeing non-start page");
+            panic("Tried freeing non-start page : %d -- allocsize : %d", page, coremap[page].allocation_size);
         }
 
         /* TODO: Make this reference counting based !!! */
@@ -206,13 +222,18 @@ void free_kpages(vaddr_t addr){
             coremap[page].owner = 0;
         coremap[page].reference_count -= 1;
         coremap[page].allocation_size = 0;
-
-        /* TODO: Need to fix for last page */
-        coremap[page].next_free = page + i + 1;
     
         /* TODO: Need to fix this timestamp*/
         coremap[page].last_access = 1000;
 
+        /* Make sure to fix all of the previous frees */
+        while (true)
+        {
+            p_num = p_num - 1 < (int)first_page ? (int)total_pages - 1 : p_num - 1;
+            coremap[p_num].next_free = page;
+            if (!coremap[p_num].allocated)
+                break;
+        }
 
         next_page = coremap[page].next_allocated;
         coremap[page].start = 0;

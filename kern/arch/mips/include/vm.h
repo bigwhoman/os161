@@ -120,6 +120,7 @@ struct coremap_entry {
 
 struct coremap_entry* coremap;
 size_t first_free_page;
+size_t first_page;
 size_t total_free_pages;
 size_t total_pages;
 size_t first_page_paddr;
