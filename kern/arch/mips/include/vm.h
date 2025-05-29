@@ -67,6 +67,8 @@
  */
 #define PADDR_TO_KVADDR(paddr) ((paddr)+MIPS_KSEG0)
 #define KVADDR_TO_PADDR(vaddr) ((vaddr)-MIPS_KSEG0)
+#define PAGE_TO_PADDR(page) ((page)*PAGE_SIZE)
+#define PADDR_TO_PAGE(paddr) ((paddr)/PAGE_SIZE)
 
 /*
  * The top of user space. (Actually, the address immediately above the
