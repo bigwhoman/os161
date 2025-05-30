@@ -126,6 +126,7 @@ size_t first_page;
 size_t total_free_pages;
 size_t total_pages;
 size_t first_page_paddr;
+size_t used_pages;
 
 /*
  * Interface to the low-level module that looks after the amount of

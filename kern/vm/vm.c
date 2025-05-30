@@ -54,6 +54,7 @@ void init_coremap(paddr_t start_paddr, size_t num_pages){
     first_page_paddr = start_paddr;
     total_free_pages = num_pages;
     total_pages = num_pages;
+    used_pages = start_page;
 }
 
 void vm_bootstrap(){
@@ -161,7 +162,7 @@ vaddr_t alloc_kpages(unsigned npages){
     if (aquired_pages < npages)
     {
         /* TODO: fix this when fixing swap*/
-        panic("not enough consecutive memory !!! -- max found : %d !!!!", max_consecutive);
+        panic("not enough consecutive memory !!! -- max found : %d -- used pages : %d ", max_consecutive, used_pages);
         spinlock_release(&coremap_lock);
         return 0;
     }
@@ -229,6 +230,7 @@ vaddr_t alloc_kpages(unsigned npages){
     }
     
 
+    used_pages += npages;
 
     paddr_t page_paddr;
     page_paddr = PAGE_TO_PADDR(starting_page);
@@ -252,6 +254,8 @@ void free_kpages(vaddr_t addr){
         panic("Tried freeing non-start page");
     }
     DEBUG(DB_VM, "page : %d -- allocations : %d\n", page, coremap[page].allocation_size);
+
+    used_pages -= coremap[page].allocation_size;
     /* TODO: Check the owner and pid */ 
     next_page = page;
     for (i = 0; i < coremap[page].allocation_size; i++)
@@ -259,7 +263,7 @@ void free_kpages(vaddr_t addr){
         p_num = page;
         if (!coremap[page].allocated)
         {
-            panic("Tried freeing non-start page : %d -- allocsize : %d", page, coremap[page].allocation_size);
+            panic("Tried freeing non-allocated page : %d -- allocsize : %d", page, coremap[page].allocation_size);
         }
 
         /* TODO: Make this reference counting based !!! */
@@ -298,7 +302,7 @@ void free_kpages(vaddr_t addr){
  * to the caller. But it should have been correct at some point in time.
  */
 unsigned int coremap_used_bytes(void){
-    return 0;
+    return used_pages * PAGE_SIZE;
 }
 
 /* TLB shootdown handling called from interprocessor_interrupt */
