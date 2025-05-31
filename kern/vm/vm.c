@@ -162,7 +162,7 @@ vaddr_t alloc_kpages(unsigned npages){
     if (aquired_pages < npages)
     {
         /* TODO: fix this when fixing swap*/
-        panic("not enough consecutive memory !!! -- max found : %d -- used pages : %d ", max_consecutive, used_pages);
+        // panic("not enough consecutive memory !!! -- max found : %d -- used pages : %d ", max_consecutive, used_pages);
         spinlock_release(&coremap_lock);
         return 0;
     }
