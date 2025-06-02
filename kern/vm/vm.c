@@ -55,6 +55,7 @@ void init_coremap(paddr_t start_paddr, size_t num_pages){
     total_free_pages = num_pages;
     total_pages = num_pages;
     used_pages = start_page;
+    asid_bitmap = bitmap_create(MAX_ASID);
 }
 
 void vm_bootstrap(){
@@ -307,7 +308,7 @@ unsigned int coremap_used_bytes(void){
 
 /* TLB shootdown handling called from interprocessor_interrupt */
 void vm_tlbshootdown(const struct tlbshootdown * shootdown){
-    (void) shootdown;
+    kprintf("shootdown %p\n", shootdown);
     return;
 }
 

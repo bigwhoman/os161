@@ -31,15 +31,58 @@
 #include <kern/errno.h>
 #include <lib.h>
 #include <addrspace.h>
+#include <bitmap.h>
 #include <vm.h>
 #include <proc.h>
+#include <spl.h>
+#include <lib.h>
+
+
+
+/* Addrspace Spinlock */
+static struct spinlock addrspace_lock = SPINLOCK_INITIALIZER;
+
+uint8_t get_asid(void);
+/*
+ * Get a new address space identifier (ASID).
+ * This function should allocate a unique ASID for the new address space.
+ */
+uint8_t get_asid(){
+	unsigned int asid;
+	int result;
+	int spl;
+	size_t i;
+	result = 0;
+	spinlock_acquire(&addrspace_lock);
+	bitmap_mark(asid_bitmap, 0); /* Always mark the first ASID as used */
+
+	/* Find a free ASID */
+	result = bitmap_alloc(asid_bitmap, &asid);
+	if (result) {
+		/* No free ASID available */
+		spl = splhigh(); /* Disable interrupts */
+		/* Invalidate all TLB entries */
+		for (i = 0; i < NUM_TLB; i++)
+		{
+			tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+		}
+		for ( i = 0; i < MAX_ASID; i++)
+		{
+			bitmap_unmark(asid_bitmap, i); /* Free all ASIDs */
+		}
+		bitmap_alloc(asid_bitmap, &asid); /* Allocate a new ASID */
+		splx(spl);
+	}
+	spinlock_release(&addrspace_lock);
+	return asid; 
+}
+
 
 /*
- * Note! If OPT_DUMBVM is set, as is the case until you start the VM
- * assignment, this file is not compiled or linked or in any way
- * used. The cheesy hack versions in dumbvm.c are used instead.
+ * Create a new address space.
+ *
+ * Returns a pointer to the new address space, or NULL on failure.
  */
-
 struct addrspace *
 as_create(void)
 {
@@ -50,9 +93,34 @@ as_create(void)
 		return NULL;
 	}
 
+	as->stack_top = USERSTACK; /* initial stack pointer */
+	as->stack_bottom = USERSTACK; /* bottom of stack */
+	
+	as->ref_count = 1; /* initial reference count */
+
+	as->addrlock = lock_create("addrspace_lock");
+	if (as->addrlock == NULL) {
+		kfree(as);
+		return NULL; /* Failed to create lock */
+	}
+
 	/*
-	 * Initialize as needed.
+	 * Initialize heap as needed.
 	 */
+	as->heap_base = 0; /* base address of heap */
+	as->heap_end = 0; /* current end of the heap */
+
+
+	/*
+	 * Initialize the page table base address to 0.
+	 * This will be set up properly when the process is loaded.
+	 */
+	as->pt_base = (int)NULL; /* base address of page table */
+
+	// Initialize the linked list of memory regions.
+	as->regions = NULL; /* linked list of memory regions */
+
+	as->asid = 0; /* get a new address space identifier */	
 
 	return as;
 }
@@ -61,6 +129,10 @@ int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
 	struct addrspace *newas;
+	KASSERT(old != NULL);
+	KASSERT(ret != NULL);
+	
+
 
 	newas = as_create();
 	if (newas==NULL) {
@@ -68,10 +140,30 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	}
 
 	/*
-	 * Write this.
+	 * Copy the old address space's properties to the new one.
 	 */
+	newas->stack_top = old->stack_top; /* Copy stack top */
+	newas->stack_bottom = old->stack_bottom; /* Copy stack bottom */
+	newas->heap_base = old->heap_base; /* Copy heap base */
+	newas->heap_end = old->heap_end; /* Copy heap end */
+	newas->pt_base = old->pt_base; /* Copy page table base address */
+	newas->asid = old->asid; /* Copy ASID */
+	newas->addrlock = lock_create("new_addrspace_lock");
+	if (newas->addrlock == NULL) {
+		kfree(newas);
+		return ENOMEM; /* Failed to create lock for new address space */
+	}
 
-	(void)old;
+	lock_acquire(old->addrlock);
+	/* This would probably need to be changed for COW */
+	old->ref_count += 1; /* Increment reference count for the old address space */
+	newas->ref_count = old->ref_count; /* Set initial reference count for the new address space */
+	lock_release(old->addrlock);
+
+	/*
+	 * Shallow copy the linked list of memory regions.
+	 */
+	newas->regions = old->regions;
 
 	*ret = newas;
 	return 0;
@@ -84,9 +176,29 @@ as_destroy(struct addrspace *as)
 	 * Clean up as needed.
 	 */
 
+	KASSERT(as != NULL);
+	struct vm_region *region, *next_region;
+	lock_acquire(as->addrlock); /* Acquire the lock to ensure thread safety */
+	as->ref_count -= 1; /* Decrement the reference count */
+	if (as->ref_count > 0) {
+		lock_release(as->addrlock); /* Release the lock if there are still references */
+		return; /* Don't destroy the address space if there are still references */
+	}
+	lock_release(as->addrlock); /* Release the lock before freeing */
+	while(as->regions != NULL) {
+		region = as->regions;
+		next_region = region->next;
+		kfree(region); /* Free the region */
+		as->regions = next_region; /* Move to the next region */
+	}
+
 	kfree(as);
 }
 
+/*
+ * Activate the current address space. 
+ * Assign a new ASID for TLB if not already set. 
+ */
 void
 as_activate(void)
 {
@@ -100,10 +212,13 @@ as_activate(void)
 		 */
 		return;
 	}
-
-	/*
-	 * Write this.
-	 */
+	if (as->asid == 0) {
+		/*
+		 * If the ASID is 0, it means we haven't assigned an ASID yet.
+		 * Get a new ASID for this address space.
+		 */
+		as->asid = get_asid();
+	}
 }
 
 void
@@ -134,48 +249,87 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	 * Write this.
 	 */
 
-	(void)as;
-	(void)vaddr;
-	(void)memsize;
-	(void)readable;
-	(void)writeable;
-	(void)executable;
-	return ENOSYS;
-}
+	KASSERT(as != NULL);
+	KASSERT(memsize > 0);
+	KASSERT(vaddr % PAGE_SIZE == 0);
+	KASSERT((vaddr + memsize) % PAGE_SIZE == 0);
+	KASSERT((vaddr + memsize) > vaddr); /* Check for overflow */
+	KASSERT((vaddr + memsize) <= as->stack_top); /* Ensure it doesn't exceed user stack */
 
-int
-as_prepare_load(struct addrspace *as)
-{
-	/*
-	 * Write this.
-	 */
+	struct vm_region *region;
+	region = as->regions;
+	while (region != NULL) {
+		/* Check for overlapping regions */
+		if ((vaddr < region->start + region->size) && (vaddr + memsize > region->start)) {
+			return EEXIST; /* Overlapping region */
+		}
+		region = region->next;
+	}
 
-	(void)as;
+	region = kmalloc(sizeof(struct vm_region));
+	if (region == NULL) {
+		return ENOMEM; /* Out of memory */
+	}
+	region->start = vaddr;
+	region->size = memsize;
+	region->readable = readable;
+	region->writeable = writeable;
+	region->executable = executable;
+	region->temp_write = 0; /* Temporary write permission not set */
+	region->next = NULL; /* Insert at the beginning of the list */
 	return 0;
 }
 
+/*
+ * Prepare the address space for loading an executable.
+ * This function is called before actually loading from an executable into the address space.
+ * Set the temporary write permission for all regions to 1.
+ */
+int
+as_prepare_load(struct addrspace *as)
+{
+	KASSERT(as != NULL);
+	struct vm_region *region;
+	region = as->regions;
+	while(region != NULL) 
+	{
+		region->temp_write = 1; /* Set temporary write permission for all regions */
+		region = region->next; /* Move to the next region */
+	}
+	return 0;
+}
+
+/*
+ * Complete the loading of an executable into the address space.
+ * This function is called when loading from an executable is complete.
+ * Set the temporary write permission for all regions to 0.
+ */
 int
 as_complete_load(struct addrspace *as)
 {
-	/*
-	 * Write this.
-	 */
-
-	(void)as;
+	KASSERT(as != NULL);
+	struct vm_region *region;
+	region = as->regions;
+	while (region != NULL)
+	{
+		region->temp_write = 0; /* Set temporary write permission for all regions */
+		region = region->next;	/* Move to the next region */
+	}
 	return 0;
 }
 
 int
 as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 {
-	/*
-	 * Write this.
-	 */
 
-	(void)as;
-
-	/* Initial user-level stack pointer */
-	*stackptr = USERSTACK;
+	KASSERT(as != NULL);
+	KASSERT(stackptr != NULL);
+	/* Initialize the stack pointer to the top of the user stack */
+	if (as->stack_top == 0) {
+		/* If the stack top is not set, set it to USERSTACK */
+		as->stack_top = USERSTACK;
+	}
+	*stackptr = as->stack_top; /* Set the initial stack pointer */
 
 	return 0;
 }

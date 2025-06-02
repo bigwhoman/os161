@@ -273,8 +273,6 @@ int sys_getpid(){
  *  and then performs the actual exit by calling _exit.
  * Note : For now we do not take wait into consideration and think that 
  * we only destroy the process
- * 
- * TODO : Send status of child
  */
 int sys_exit(int status){
     /*

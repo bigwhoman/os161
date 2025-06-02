@@ -34,13 +34,9 @@
  * Address space structure and operations.
  */
 
-
-#include <vm.h>
-#include "opt-dumbvm.h"
-
 struct vnode;
 
-
+#include <vm.h>
 /*
  * Address space - data structure associated with the virtual memory
  * space of a process.
@@ -49,17 +45,31 @@ struct vnode;
  */
 
 struct addrspace {
-#if OPT_DUMBVM
-        vaddr_t as_vbase1;
-        paddr_t as_pbase1;
-        size_t as_npages1;
-        vaddr_t as_vbase2;
-        paddr_t as_pbase2;
-        size_t as_npages2;
-        paddr_t as_stackpbase;
-#else
-        /* Put stuff here for your VM system */
-#endif
+        paddr_t pt_base;  /* base address of page table */
+
+        vaddr_t stack_top; /* initial stack pointer */
+        vaddr_t stack_bottom; /* bottom of stack */
+
+        vaddr_t heap_base; /* base address of heap */
+        vaddr_t heap_end; /* current end of the heap */
+
+        struct vm_region *regions; /* linked list of memory regions */
+
+        int ref_count; /* reference count for this address space */
+
+        uint8_t asid; /* address space identifier */
+
+        struct lock* addrlock; /* lock for this address space */
+};
+
+struct vm_region {
+        vaddr_t start;      /* start address of region */
+        size_t size;       /* size of region */
+        unsigned int readable : 1; /* region is readable */
+        unsigned int writeable : 1; /* region is writeable */
+        unsigned int executable : 1; /* region is executable */
+        unsigned int temp_write : 1; /* temporary write permission */
+        struct vm_region *next; /* next region in linked list */
 };
 
 /*
