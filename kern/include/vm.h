@@ -46,6 +46,10 @@
 #define VM_FAULT_WRITE       1    /* A write was attempted */
 #define VM_FAULT_READONLY    2    /* A write to a readonly page was attempted*/
 #define MAX_ASID 64 // Maximum number of address space identifiers (ASIDs)
+#define FIRST_LEVEL_MASK(vaddr) ((vaddr >> 24) & 0xFF) // Mask for first-level index
+#define SECOND_LEVEL_MASK(vaddr) ((vaddr >> 16) & 0xFF) // Mask for second-level index
+#define THIRD_LEVEL_MASK(vaddr) ((vaddr >> 12) & 0xF) // Mask for third-level index
+#define OFFSET_MASK(vaddr) (vaddr & 0xFFF) // Mask for offset within a page
 
 struct bitmap* asid_bitmap; // Create a bitmap for ASIDs
 

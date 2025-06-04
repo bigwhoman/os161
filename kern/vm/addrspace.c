@@ -95,7 +95,7 @@ as_create(void)
 
 	as->stack_top = USERSTACK; /* initial stack pointer */
 	as->stack_bottom = USERSTACK; /* bottom of stack */
-	
+
 	as->ref_count = 1; /* initial reference count */
 
 	as->addrlock = lock_create("addrspace_lock");
@@ -115,16 +115,61 @@ as_create(void)
 	 * Initialize the page table base address to 0.
 	 * This will be set up properly when the process is loaded.
 	 */
-	as->pt_base = (int)NULL; /* base address of page table */
+	as->pt = kmalloc(sizeof(struct page_table));
+	if (as->pt == NULL) {
+		lock_destroy(as->addrlock);
+		kfree(as);
+		return NULL; /* Failed to allocate page table */
+	}	
 
-	// Initialize the linked list of memory regions.
+	// Initialize the linked list of special memory regions.
 	as->regions = NULL; /* linked list of memory regions */
+
+	as->stack_region = kmalloc(sizeof(struct vm_region));
+	if (as->stack_region == NULL) {
+		kfree(as->pt);
+		lock_destroy(as->addrlock);
+		kfree(as);
+		return NULL; /* Failed to allocate stack region */
+	}
+	// Initialize the stack region
+	as->stack_region->start = as->stack_top; /* Start at the top of the stack */
+	as->stack_region->size = 0; /* Size of the stack region */
+	as->stack_region->readable = 1; /* Stack is readable */
+	as->stack_region->writeable = 1; /* Stack is writeable */
+	as->stack_region->executable = 0; /* Stack is not executable */
+	as->stack_region->temp_write = 0; /* Temporary write permission not set */
+	as->stack_region->next = NULL; /* No next region */
+	// Initialize the heap region
+	as->heap_region = kmalloc(sizeof(struct vm_region));
+	if (as->heap_region == NULL) {
+		kfree(as->stack_region);
+		kfree(as->pt);
+		lock_destroy(as->addrlock);
+		kfree(as);
+		return NULL; /* Failed to allocate heap region */
+	}
+	as->heap_region->start = as->heap_base; /* Start at the base of the heap */
+	as->heap_region->size = 0; /* Size of the heap region */
+	as->heap_region->readable = 1; /* Heap is readable */
+	as->heap_region->writeable = 1; /* Heap is writeable */
+	as->heap_region->executable = 0; /* Heap is not executable */
+	as->heap_region->temp_write = 0; /* Temporary write permission not set */
+	as->heap_region->next = NULL; /* No next region */
+	// Initialize the regions linked list
+
 
 	as->asid = 0; /* get a new address space identifier */	
 
 	return as;
 }
 
+
+/* Copy the address space of old process into a new address space, 
+ * returning the new address space in ret.
+ * This function is used for process creation, such as fork.
+ * The copy is a deep copy of the address space,
+ */
 int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
@@ -146,8 +191,8 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	newas->stack_bottom = old->stack_bottom; /* Copy stack bottom */
 	newas->heap_base = old->heap_base; /* Copy heap base */
 	newas->heap_end = old->heap_end; /* Copy heap end */
-	newas->pt_base = old->pt_base; /* Copy page table base address */
-	newas->asid = old->asid; /* Copy ASID */
+	newas->pt = old->pt; /* Copy page table address */
+	newas->asid = old->asid; /* TODO: Not sure -- Copy ASID */
 	newas->addrlock = lock_create("new_addrspace_lock");
 	if (newas->addrlock == NULL) {
 		kfree(newas);
@@ -245,24 +290,23 @@ int
 as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 		 int readable, int writeable, int executable)
 {
-	/*
-	 * Write this.
-	 */
+
 
 	KASSERT(as != NULL);
 	KASSERT(memsize > 0);
-	KASSERT(vaddr % PAGE_SIZE == 0);
-	KASSERT((vaddr + memsize) % PAGE_SIZE == 0);
 	KASSERT((vaddr + memsize) > vaddr); /* Check for overflow */
 	KASSERT((vaddr + memsize) <= as->stack_top); /* Ensure it doesn't exceed user stack */
 
-	struct vm_region *region;
+	struct vm_region *region,*last_region;
 	region = as->regions;
+	last_region = region;
 	while (region != NULL) {
 		/* Check for overlapping regions */
 		if ((vaddr < region->start + region->size) && (vaddr + memsize > region->start)) {
 			return EEXIST; /* Overlapping region */
 		}
+		last_region = region; /* Keep track of the last region */
+		/* Move to the next region */
 		region = region->next;
 	}
 
@@ -277,6 +321,13 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	region->executable = executable;
 	region->temp_write = 0; /* Temporary write permission not set */
 	region->next = NULL; /* Insert at the beginning of the list */
+
+	if (last_region != NULL){
+		last_region->next = region; /* Link the new region to the last one */
+	} else {
+		as->regions = region; /* If no regions, set as the first region */
+	}
+
 	return 0;
 }
 

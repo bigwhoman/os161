@@ -5,9 +5,12 @@
 #include <current.h>
 #include <lib.h>
 #include <vm.h>
+#include <addrspace.h>
+#include <kern/errno.h>
 
 void init_coremap(paddr_t , size_t );
-
+paddr_t get_last_level_pt(vaddr_t vaddr, struct addrspace *as);
+unsigned int coremap_alloc_userpage(void);
 /* Coremap Spinlock */
 static struct spinlock coremap_lock = SPINLOCK_INITIALIZER;
 
@@ -89,12 +92,7 @@ void vm_bootstrap(){
     return;
 }
 
-/* Fault handling function called by trap code */
-int vm_fault(int faulttype, vaddr_t faultaddress){
-    (void) faulttype;
-    (void) faultaddress;
-    return 0;
-}
+
 
 /*
  * Allocate/free kernel heap pages (called by kmalloc/kfree) 
@@ -297,6 +295,7 @@ void free_kpages(vaddr_t addr){
     return;
 }
 
+
 /*
  * Return amount of memory (in bytes) used by allocated coremap pages.  If
  * there are ongoing allocations, this value could change after it is returned
@@ -312,3 +311,135 @@ void vm_tlbshootdown(const struct tlbshootdown * shootdown){
     return;
 }
 
+
+vaddr_t get_last_level_pt(vaddr_t vaddr, struct addrspace *as){
+    KASSERT(as != NULL);
+    unsigned int first_level_index;
+    struct page_table *pt,*new_pt;
+    pt = as->pt;
+    KASSERT(pt != NULL);
+    first_level_index = FIRST_LEVEL_MASK(vaddr);
+    if (pt->entries[first_level_index].valid == 0){
+        pt->entries[first_level_index].valid = 1;
+        new_pt = kmalloc(sizeof(struct page_table));
+        KASSERT(new_pt != NULL);
+        pt->entries[first_level_index].frame = PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt));
+        pt->entries[first_level_index].dirty = 0;
+        pt->entries[first_level_index].accessed = 0;
+        pt->entries[first_level_index].readable = 0; 
+        pt->entries[first_level_index].writable = 0;
+        pt->entries[first_level_index].executable = 0; // MIPS does not have hardware execute bits
+    }
+
+    pt = (struct page_table *)PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[first_level_index].frame));
+    unsigned int second_level_index;
+    second_level_index = SECOND_LEVEL_MASK(vaddr);
+    if (pt->entries[second_level_index].valid == 0){
+        pt->entries[second_level_index].valid = 1;
+        new_pt = kmalloc(sizeof(struct page_table));
+        KASSERT(new_pt != NULL);
+        pt->entries[second_level_index].frame = PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt)); 
+        pt->entries[second_level_index].dirty = 0;
+        pt->entries[second_level_index].accessed = 0;
+        pt->entries[second_level_index].readable = 0; 
+        pt->entries[second_level_index].writable = 0;
+        pt->entries[second_level_index].executable = 0; // MIPS does not have hardware execute bits
+    }
+
+    return PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[SECOND_LEVEL_MASK(vaddr)].frame));
+}
+
+/*
+ * Allocate a single user page in the coremap.
+ */
+unsigned int coremap_alloc_userpage(){
+    vaddr_t addr;
+    unsigned int page;
+    addr = alloc_kpages(1); // Allocate one page for user space
+    if (addr == 0)
+    {
+        return 0; // Allocation failed
+    }
+    page = PADDR_TO_PAGE(KVADDR_TO_PADDR(addr));
+    coremap[page].kernel = 0;
+    
+    return page;
+}
+
+/* Fault handling function called by trap code */
+int vm_fault(int faulttype, vaddr_t faultaddress){
+    if (faultaddress >= USERSPACETOP) {
+        kprintf("vm_fault: faultaddress 0x%x is above USERSPACETOP 0x%x\n", faultaddress, USERSPACETOP);
+        return EFAULT; // Invalid address
+    }
+    if (faulttype != VM_FAULT_READ && faulttype != VM_FAULT_WRITE && faulttype != VM_FAULT_READONLY) {
+        kprintf("vm_fault: invalid fault type %d\n", faulttype);
+        return EINVAL; // Invalid fault type
+    }
+    if (curproc == NULL || curproc->p_addrspace == NULL) {
+        kprintf("vm_fault: no current process or address space\n");
+        return EFAULT; // No current process or address space
+    }
+    if (faulttype == VM_FAULT_READONLY) {
+        kprintf("vm_fault: read-only fault type is not supported\n");
+        return EFAULT; // Read-only fault type is not supported
+    }
+
+    /* Check Vm_regions to see if virtaddr is valid and has permissions*/
+    struct vm_region *region;
+    region = curproc->p_addrspace->regions;
+    while (region != NULL) {
+        if ((faultaddress >= region->start) && (faultaddress < region->start + region->size)) {
+            if ((faulttype == VM_FAULT_READ && !region->readable) ||
+                (faulttype == VM_FAULT_WRITE && !(region->writeable || region->temp_write))) {
+                kprintf("vm_fault: permission denied for faultaddress 0x%x in region [%p, %p)\n",
+                        faultaddress, (void *)region->start, (void *)(region->start + region->size));
+                return EFAULT; // Permission denied
+            }
+            break; // Found a valid region
+        }
+        region = region->next;
+    }
+    /* If the region is NULL check if it is stack or heap region */
+    if (faultaddress >= MAX_USERSTACK && faultaddress < USERSPACETOP) {
+        region = curproc->p_addrspace->stack_region;
+    } else if (faultaddress >= curproc->p_addrspace->heap_region->start &&
+               faultaddress < curproc->p_addrspace->heap_region->start + curproc->p_addrspace->heap_region->size) {
+        region = curproc->p_addrspace->heap_region;
+    }
+    if (region == NULL) {
+        kprintf("vm_fault: faultaddress 0x%x is not in any valid region\n", faultaddress);
+        return EFAULT; // No valid region found for the fault address
+    }
+
+
+
+    vaddr_t third_level_index, third_level_pt;
+    third_level_index = THIRD_LEVEL_MASK(faultaddress);
+    third_level_pt = get_last_level_pt(faultaddress, curproc->p_addrspace);
+    struct page_table *pt = (struct page_table *)third_level_pt;
+    if (pt->entries[third_level_index].valid == 0) {
+        // Page fault: allocate a new page
+        unsigned int new_page_frame = coremap_alloc_userpage(); // Allocate one page
+        if (new_page_frame == 0) {
+            return ENOMEM; // Out of memory
+        }
+        pt->entries[third_level_index].frame = new_page_frame;
+        pt->entries[third_level_index].valid = 1;
+        pt->entries[third_level_index].dirty = (faulttype == VM_FAULT_WRITE);
+        pt->entries[third_level_index].readable = region->readable;
+        pt->entries[third_level_index].writable = region->writeable || region->temp_write;
+        /* This doesn't actually matter as MIPS does not have hardware execute bits*/
+        pt->entries[third_level_index].executable = region->executable;
+    } 
+    pt->entries[third_level_index].accessed = 1;
+
+    // TODO: Update the TLB with the new page mapping
+    uint32_t tlbhi = faultaddress & TLBHI_VPAGE;
+    tlbhi |= (curproc->p_addrspace->asid << TLBHI_ASID_SHIFT) & TLBHI_PID;
+    uint32_t tlblo = (PAGE_TO_PADDR(pt->entries[third_level_index].frame)& TLBLO_PPAGE) |
+                     (pt->entries[third_level_index].dirty ? TLBLO_DIRTY : 0) |
+                     (pt->entries[third_level_index].valid ? TLBLO_VALID : 0);
+    tlb_random(tlbhi, tlblo);
+    return 0;
+}

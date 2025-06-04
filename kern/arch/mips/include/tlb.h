@@ -79,7 +79,7 @@ int tlb_probe(uint32_t entryhi, uint32_t entrylo);
 /* Fields in the high-order word */
 #define TLBHI_VPAGE   0xfffff000
 #define TLBHI_PID     0x00000fc0
-
+#define TLBHI_ASID_SHIFT 6
 
 /* Fields in the low-order word */
 #define TLBLO_PPAGE   0xfffff000

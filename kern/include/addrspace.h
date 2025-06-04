@@ -29,7 +29,6 @@
 
 #ifndef _ADDRSPACE_H_
 #define _ADDRSPACE_H_
-
 /*
  * Address space structure and operations.
  */
@@ -45,7 +44,7 @@ struct vnode;
  */
 
 struct addrspace {
-        paddr_t pt_base;  /* base address of page table */
+        struct page_table *pt; /* pointer to the page table */
 
         vaddr_t stack_top; /* initial stack pointer */
         vaddr_t stack_bottom; /* bottom of stack */
@@ -53,7 +52,9 @@ struct addrspace {
         vaddr_t heap_base; /* base address of heap */
         vaddr_t heap_end; /* current end of the heap */
 
-        struct vm_region *regions; /* linked list of memory regions */
+        struct vm_region *regions; /* linked list of special memory regions for mmap and shared segments */
+        struct vm_region *stack_region; /* linked list of stack regions */
+        struct vm_region *heap_region; /* linked list of heap regions */
 
         int ref_count; /* reference count for this address space */
 
@@ -71,6 +72,33 @@ struct vm_region {
         unsigned int temp_write : 1; /* temporary write permission */
         struct vm_region *next; /* next region in linked list */
 };
+
+/*
+ * Page table entry - maps a virtual address to a physical address.
+ * Contains flags for validity, dirty, accessed, and read-only status.
+ */
+struct page_table_entry {
+        unsigned int frame : 16; /* physical address */
+        unsigned int valid : 1; /* valid bit */
+        unsigned int dirty : 1; /* dirty bit */
+        unsigned int accessed : 1; /* accessed bit */
+        unsigned int readable : 1; /* read-only bit */
+        unsigned int writable : 1; /* read-only bit */
+        unsigned int executable : 1; /* read-only bit */
+};
+
+#define PAGE_TABLE_SIZE (PAGE_SIZE / sizeof(struct page_table_entry)) /* Size of the page table */
+
+/*
+ * Page table - maps virtual addresses to physical addresses.
+ * Each process has its own page table.
+ * The page table is an array of page table entries.
+ */
+struct page_table {
+        struct page_table_entry entries[PAGE_TABLE_SIZE]; /* array of page table entries */
+};
+
+
 
 /*
  * Functions in addrspace.c:

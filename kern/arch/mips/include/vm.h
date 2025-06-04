@@ -85,6 +85,7 @@
  * grows downwards.
  */
 #define USERSTACK     USERSPACETOP
+#define MAX_USERSTACK  (USERSTACK - 10 * PAGE_SIZE)
 
 /*
  * Coremap entry struct
