@@ -323,31 +323,42 @@ vaddr_t get_last_level_pt(vaddr_t vaddr, struct addrspace *as){
     if (pt->entries[first_level_index].valid == 0){
         pt->entries[first_level_index].valid = 1;
         new_pt = kmalloc(sizeof(struct page_table));
+        memset(new_pt, 0, sizeof(struct page_table)); // Initialize the new page table
         KASSERT(new_pt != NULL);
+        DEBUG(DB_VM, "Creating new page table 2 - index %x - %p - %x\n",
+                                 first_level_index, new_pt, PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt)));
         pt->entries[first_level_index].frame = PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt));
         pt->entries[first_level_index].dirty = 0;
         pt->entries[first_level_index].accessed = 0;
-        pt->entries[first_level_index].readable = 0; 
+        pt->entries[first_level_index].readable = 1; 
         pt->entries[first_level_index].writable = 0;
         pt->entries[first_level_index].executable = 0; // MIPS does not have hardware execute bits
     }
+    
 
     pt = (struct page_table *)PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[first_level_index].frame));
+    DEBUG(DB_VM, "First level looked up -->> %x got %p\n",
+          first_level_index, pt);
     unsigned int second_level_index;
     second_level_index = SECOND_LEVEL_MASK(vaddr);
     if (pt->entries[second_level_index].valid == 0){
         pt->entries[second_level_index].valid = 1;
         new_pt = kmalloc(sizeof(struct page_table));
+        memset(new_pt, 0, sizeof(struct page_table)); // Initialize the new page table
         KASSERT(new_pt != NULL);
+        DEBUG(DB_VM, "Creating new page table 3 - index %x - %p - %x\n",
+                                 second_level_index, new_pt, PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt)));
         pt->entries[second_level_index].frame = PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt)); 
         pt->entries[second_level_index].dirty = 0;
         pt->entries[second_level_index].accessed = 0;
-        pt->entries[second_level_index].readable = 0; 
+        pt->entries[second_level_index].readable = 1; 
         pt->entries[second_level_index].writable = 0;
         pt->entries[second_level_index].executable = 0; // MIPS does not have hardware execute bits
     }
-
-    return PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[SECOND_LEVEL_MASK(vaddr)].frame));
+    pt = (struct page_table *)PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[SECOND_LEVEL_MASK(vaddr)].frame));
+    DEBUG(DB_VM, "Second level looked up -->> %x got %p\n",
+          second_level_index,  pt);
+    return (int)pt;
 }
 
 /*
