@@ -54,23 +54,23 @@ uint8_t get_asid(){
 	size_t i;
 	result = 0;
 	spinlock_acquire(&addrspace_lock);
-	bitmap_mark(asid_bitmap, 0); /* Always mark the first ASID as used */
-
+	if(!bitmap_isset(asid_bitmap, 0)) {
+		bitmap_mark(asid_bitmap, 0); /* Always mark the first ASID as used */
+	}
 	/* Find a free ASID */
 	result = bitmap_alloc(asid_bitmap, &asid);
 	if (result) {
 		/* No free ASID available */
 		spl = splhigh(); /* Disable interrupts */
+
 		/* Invalidate all TLB entries */
-		for (i = 0; i < NUM_TLB; i++)
-		{
-			tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
-		}
-		for ( i = 0; i < MAX_ASID; i++)
+		tlb_shootdown_all();	
+		for ( i = 1; i < MAX_ASID; i++)
 		{
 			bitmap_unmark(asid_bitmap, i); /* Free all ASIDs */
 		}
 		bitmap_alloc(asid_bitmap, &asid); /* Allocate a new ASID */
+
 		splx(spl);
 	}
 	spinlock_release(&addrspace_lock);
@@ -236,6 +236,25 @@ as_destroy(struct addrspace *as)
 		kfree(region); /* Free the region */
 		as->regions = next_region; /* Move to the next region */
 	}
+	/* Free the stack region */
+	if (as->stack_region != NULL) {
+		kfree(as->stack_region);
+	}
+	/* Free the heap region */
+	if (as->heap_region != NULL) {
+		kfree(as->heap_region);
+	}
+	/* Free the page table */
+	free_page_table(as->pt, 1); /* Free the page table */
+	lock_destroy(as->addrlock); /* Destroy the lock */
+	/* Free the address space structure */
+	if (as->asid != 0) {
+		/* If the ASID is not 0, free the ASID */
+		spinlock_acquire(&addrspace_lock);
+		tlb_invalidate_asid_entries(as->asid); /* Invalidate TLB entries for this ASID */
+		bitmap_unmark(asid_bitmap, as->asid); /* Unmark the ASID */
+		spinlock_release(&addrspace_lock);
+	}
 
 	kfree(as);
 }
@@ -316,7 +335,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	}
 	region->start = vaddr;
 	region->size = memsize;
-	region->readable = readable;
+	region->readable = readable | executable;
 	region->writeable = writeable;
 	region->executable = executable;
 	region->temp_write = 0; /* Temporary write permission not set */

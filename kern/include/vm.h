@@ -46,6 +46,7 @@
 #define VM_FAULT_WRITE       1    /* A write was attempted */
 #define VM_FAULT_READONLY    2    /* A write to a readonly page was attempted*/
 #define MAX_ASID 64 // Maximum number of address space identifiers (ASIDs)
+#define PT_LEVELS 3 // Number of levels in the page table
 #define FIRST_LEVEL_MASK(vaddr) ((vaddr >> 24) & 0xFF) // Mask for first-level index
 #define SECOND_LEVEL_MASK(vaddr) ((vaddr >> 16) & 0xFF) // Mask for second-level index
 #define THIRD_LEVEL_MASK(vaddr) ((vaddr >> 12) & 0xF) // Mask for third-level index
@@ -62,6 +63,15 @@ int vm_fault(int faulttype, vaddr_t faultaddress);
 /* Allocate/free kernel heap pages (called by kmalloc/kfree) */
 vaddr_t alloc_kpages(unsigned npages);
 void free_kpages(vaddr_t addr);
+
+/* Free page table and mark coremap pages as free */
+void free_page_table(void *pt, size_t level);
+
+/* Shootdown all tlb entries */
+void tlb_shootdown_all(void);
+
+/* Invalidate tlb entries for a specific asic */
+void tlb_invalidate_asid_entries(uint32_t asid);
 
 /*
  * Return amount of memory (in bytes) used by allocated coremap pages.  If

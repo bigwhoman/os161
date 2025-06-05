@@ -112,6 +112,7 @@ vaddr_t alloc_kpages(unsigned npages){
     (void) i;
     (void) p_num;
 
+    DEBUG(DB_VM, "Allocating %d pages for %d\n", npages, curproc->pid);
     /*
      * Search the whole coremap for free pages
      * Our priority is to find consecutive pages 
@@ -252,7 +253,7 @@ void free_kpages(vaddr_t addr){
     if (!coremap[page].start){
         panic("Tried freeing non-start page");
     }
-    DEBUG(DB_VM, "page : %d -- allocations : %d\n", page, coremap[page].allocation_size);
+    DEBUG(DB_VM, "Deallocating %d pages for %d \n", coremap[page].allocation_size, coremap[page].owner);
 
     used_pages -= coremap[page].allocation_size;
     /* TODO: Check the owner and pid */ 
@@ -366,6 +367,26 @@ unsigned int coremap_alloc_userpage(){
     return page;
 }
 
+void free_page_table(void *page_table, size_t level){
+    struct page_table *pt;
+    pt = (struct page_table *)page_table;
+    if (pt == NULL) {
+        return; // Nothing to free
+    }
+    for (size_t i = 0; i < PAGE_TABLE_SIZE; i++)
+    {
+        if (pt->entries[i].valid) {
+            if (level < PT_LEVELS) {
+                // Recursively free the next level
+                struct page_table *next_pt = (struct page_table *)PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[i].frame));
+                free_page_table(next_pt, level + 1);
+            }
+            // Free the current page table entry
+            kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[i].frame)));
+        }
+    }
+}
+
 /* Fault handling function called by trap code */
 int vm_fault(int faulttype, vaddr_t faultaddress){
     if (faultaddress >= USERSPACETOP) {
@@ -424,6 +445,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         if (new_page_frame == 0) {
             return ENOMEM; // Out of memory
         }
+        KASSERT(new_page_frame < total_pages); // Ensure the page frame is within bounds
         pt->entries[third_level_index].frame = new_page_frame;
         pt->entries[third_level_index].valid = 1;
         pt->entries[third_level_index].dirty = (faulttype == VM_FAULT_WRITE);
@@ -434,7 +456,8 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     } 
     pt->entries[third_level_index].accessed = 1;
 
-    // TODO: Update the TLB with the new page mapping
+    // Updating the TLB entry
+    // We need to set the TLBHI and TLBLO entries 
     uint32_t tlbhi = faultaddress & TLBHI_VPAGE;
     tlbhi |= (curproc->p_addrspace->asid << TLBHI_ASID_SHIFT) & TLBHI_PID;
     uint32_t tlblo = (PAGE_TO_PADDR(pt->entries[third_level_index].frame)& TLBLO_PPAGE) |
@@ -442,4 +465,26 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
                      (pt->entries[third_level_index].valid ? TLBLO_VALID : 0);
     tlb_random(tlbhi, tlblo);
     return 0;
+}
+
+/*
+ * Invalidate all TLB entries for a specific ASID.
+ * This function is called when an address space is destroyed.
+ */
+void tlb_invalidate_asid_entries(uint32_t asid) {
+    for (int i = 0; i < NUM_TLB; i++) {
+        uint32_t entryhi, entrylo;
+        tlb_read(&entryhi, &entrylo, i);
+        if (((entryhi & TLBHI_PID) >> TLBHI_ASID_SHIFT) == asid) {
+            tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+        }
+    }
+}
+
+/* Do a full tlb shootdown */
+void tlb_shootdown_all(void) {
+    // Invalidate all TLB entries
+    for (int i = 0; i < NUM_TLB; i++) {
+        tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+    }
 }
