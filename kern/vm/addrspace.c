@@ -247,6 +247,7 @@ as_destroy(struct addrspace *as)
 	}
 	/* Free the page table */
 	free_page_table(as->pt, 1); /* Free the page table */
+	kfree(as->pt); /* Free the page table structure */
 	lock_destroy(as->addrlock); /* Destroy the lock */
 	/* Free the address space structure */
 	if (as->asid != 0) {
