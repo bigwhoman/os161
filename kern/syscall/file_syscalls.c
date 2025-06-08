@@ -8,6 +8,7 @@
 #include <vfs.h>
 #include <copyinout.h>
 #include <kern/fcntl.h>
+#include <proc.h>
 
 /*
  *
@@ -66,7 +67,7 @@ int sys_open(char *filename, int flags, mode_t mode, int *retval){
         if(curproc->fd_table[i] == NULL){
             curproc->fd_table[i] = v;
             /* This needs to be changed according to mode !!*/
-            *curproc->fd_pos[i] = 0;
+            curproc->fd_pos[i] = 0;
             *retval = i;
             curproc -> fd_path[i] = kstrdup(filename);
             curproc -> fd_flags[i] = flags;
@@ -99,26 +100,7 @@ int sys_close(int fd, int *retval){
 		return err;
 	}
 	lock_acquire(curproc->fd_lock[fd]);
-    *retval = 0;
-
-    if (fd == curproc -> stdin){
-        curproc -> stdin = -1;
-        curproc -> fd_table[fd] = NULL;
-        lock_release(curproc->fd_lock[fd]);
-        return 0;
-    }
-    if (fd == curproc -> stdout){
-        curproc -> stdout = -1;
-        curproc -> fd_table[fd] = NULL;
-        lock_release(curproc->fd_lock[fd]);
-        return 0;
-    }
-    if (fd == curproc -> stderr){
-        curproc -> stderr = -1;
-        curproc -> fd_table[fd] = NULL;
-        lock_release(curproc->fd_lock[fd]);
-        return 0;
-    }
+    *retval = 0; 
 
     struct vnode *v;
     v = curproc -> fd_table[fd];
@@ -128,7 +110,18 @@ int sys_close(int fd, int *retval){
         return EBADF;
     }
     vfs_close(v);
-    curproc -> fd_count[fd] -= 1;
+    *curproc -> fd_count[fd] -= 1;
+	if (*curproc -> fd_count[fd] <= 0)
+	{
+		kfree(curproc -> fd_path[fd]);
+		curproc -> fd_path[fd] = NULL;
+		lock_release(curproc->fd_lock[fd]);
+		if (curproc->fd_lock[fd] != NULL && curproc->fd_lock[fd] != console_lock)
+		{
+			lock_destroy(curproc->fd_lock[fd]);
+		}
+		return err;
+	}
     curproc -> fd_table[fd] = NULL; 
     lock_release(curproc->fd_lock[fd]);
     return err;
@@ -179,7 +172,7 @@ int sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
 	u.uio_iov = &iov;
 	u.uio_iovcnt = 1;
 	u.uio_resid = buflen; // amount to read from the file
-	u.uio_offset = *curproc->fd_pos[fd];
+	u.uio_offset = curproc->fd_pos[fd];
 	u.uio_segflg = UIO_USERSPACE;
 	u.uio_rw = UIO_WRITE;
 	u.uio_space = curproc->p_addrspace;
@@ -192,7 +185,7 @@ int sys_write(volatile int fd, const void *buf, size_t buflen, int *retval){
 		return err;
 	}
 
-	*curproc->fd_pos[fd] += (buflen - u.uio_resid);
+	curproc->fd_pos[fd] += (buflen - u.uio_resid);
 	*retval = buflen - u.uio_resid;
 
 	lock_release(curproc->fd_lock[fd]);
@@ -249,7 +242,7 @@ int sys_read(volatile int fd, void *buf, size_t buflen, int *retval)
 	u.uio_iov = &iov;
 	u.uio_iovcnt = 1;
 	u.uio_resid = buflen; // amount to read from the file
-	u.uio_offset = *curproc->fd_pos[fd];
+	u.uio_offset = curproc->fd_pos[fd];
 	u.uio_segflg = UIO_USERSPACE;
 	u.uio_rw = UIO_READ;
 	u.uio_space = curproc->p_addrspace;
@@ -264,7 +257,7 @@ int sys_read(volatile int fd, void *buf, size_t buflen, int *retval)
 	}
 
 
-	*curproc->fd_pos[fd] += (buflen - u.uio_resid);
+	curproc->fd_pos[fd] += (buflen - u.uio_resid);
 	*retval = buflen - u.uio_resid;
 	
 	lock_release(curproc->fd_lock[fd]);
@@ -293,7 +286,7 @@ int sys_lseek(int fd, off_t pos, int whence, int *retval1, int *retval)
 
 	struct vnode *v;
 	v = (curproc)->fd_table[fd];
-	new_pos = *curproc->fd_pos[fd];
+	new_pos = curproc->fd_pos[fd];
 	/* Check for valid file*/
 	if (v == NULL){
 		*retval = -1;
@@ -342,11 +335,11 @@ int sys_lseek(int fd, off_t pos, int whence, int *retval1, int *retval)
 		lock_release(curproc->fd_lock[fd]);
 		return err;
 	}
-	*curproc -> fd_pos[fd] = new_pos;
+	curproc -> fd_pos[fd] = new_pos;
 
 
-	*retval = (int)(*curproc->fd_pos[fd] & 0xffffffff);
-	*retval1 = (int)((*curproc->fd_pos[fd]) >> 32);
+	*retval = (int)(curproc->fd_pos[fd] & 0xffffffff);
+	*retval1 = (int)((curproc->fd_pos[fd]) >> 32);
 	lock_release(curproc->fd_lock[fd]);
 	return err;
 }

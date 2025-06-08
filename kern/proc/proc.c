@@ -55,7 +55,6 @@
  * The process for the kernel; this holds all the kernel-only threads.
  */
 struct proc *kproc;
-struct lock *console_lock;
 static void proctable_add(struct proc *proc);
 
 /*
@@ -129,8 +128,7 @@ proc_create(const char *name)
 			}
 
 			/* Not really sure about my way of implementation */
-			proc->fd_pos[fd] = (off_t *)kmalloc(sizeof(off_t *));
-			*proc->fd_pos[fd] = 0;
+			proc -> fd_pos[fd] = 0;
 			proc -> fd_mode[fd] = -1;	
 			proc -> fd_path[fd] = NULL;
 		}
@@ -283,7 +281,6 @@ proc_destroy(struct proc *proc)
 	/* Destroy File Locks*/
 	// for (i = 0; i < MAX_FD; i++)
 	// {
-	// 	kfree(proc->fd_pos[i]);
 	// 	lock_destroy(proc -> fd_lock[i]);
 	// }
 	
@@ -291,8 +288,15 @@ proc_destroy(struct proc *proc)
 	/* Free the file-descriptor table 
 		** Hoping things dont blow up by this :)
 		** Things blew up so I removed this 
-	*/	
-	
+	*/
+	size_t i;
+	for (i = 0; i < MAX_FD; i++)
+	{
+		if (proc->fd_count[i] != NULL)
+		{
+			kfree(proc->fd_count[i]);
+		}
+	}
 
 	if(proc->p_name != NULL)
 	 	kfree(proc->p_name);

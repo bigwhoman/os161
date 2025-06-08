@@ -47,7 +47,7 @@ struct addrspace;
 struct thread;
 struct vnode;
 
-
+struct lock *console_lock;
 struct lock* pid_lock;
 struct bitmap* pid_bitmap;
 struct array* process_table;
@@ -91,7 +91,7 @@ struct proc {
 										 * TODO 2 : add a locking system
 										*/
 	
-	off_t *fd_pos[MAX_FD]; /* Find Position To Write in File*/
+	off_t fd_pos[MAX_FD]; /* Find Position To Write in File*/
 
 	struct lock *fd_lock[MAX_FD]; /* File Locks */
 
