@@ -56,113 +56,131 @@
  */
 struct proc *kproc;
 static void proctable_add(struct proc *proc);
-
+void file_table_destroy(struct file_table *ft);
+static struct fd_entry *create_console_fd(int fd_num);
+struct file_table *file_table_create(void);
 /*
  * Create a proc structure.
  */
-static
-struct proc *
-proc_create(const char *name)
+static struct proc *proc_create(const char *name)
 {
-	struct proc *proc;
+    struct proc *proc;
+    unsigned int rip = 1;
 
-	/* Dummy values - ignore them */
-	unsigned int rip;
-	size_t fd;
-	int ret;
-	rip = 1;
+    proc = kmalloc(sizeof(*proc));
+    if (proc == NULL) {
+        return NULL;
+    }
+    
+    proc->p_name = kstrdup(name);
+    if (proc->p_name == NULL) {
+        kfree(proc);
+        return NULL;
+    }
 
-	proc = kmalloc(sizeof(*proc));
-	if (proc == NULL) {
-		return NULL;
-	}
-	proc->p_name = kstrdup(name);
-	if (proc->p_name == NULL) {
-		kfree(proc);
-		proc = NULL;
-		return NULL;
-	}
+    proc->p_numthreads = 0;
+    spinlock_init(&proc->p_lock);
 
-	proc->p_numthreads = 0;
-	spinlock_init(&proc->p_lock);
+    /* VM fields */
+    proc->p_addrspace = NULL;
 
-	/* VM fields */
-	proc->p_addrspace = NULL;
+    /* VFS fields */
+    proc->p_cwd = NULL;
+    
+    /* Initialize stdin/stdout/stderr */
+    proc->stdin = STDIN_FILENO;
+    proc->stdout = STDOUT_FILENO;
+    proc->stderr = STDERR_FILENO;
+    proc->exited = false;
+    proc->child_status = 0;
 
-	/* VFS fields */
-	proc->p_cwd = NULL;
-
-	proc->max_fd = MAX_FD;
-
-	proc->stdin = STDIN_FILENO;
-	proc->stdout = STDOUT_FILENO;
-	proc->stderr = STDERR_FILENO; 
-	proc->exited = false;
-	if (strcmp(name, "[kernel]") && proc != curproc)
-		for (fd = 0; fd < MAX_FD; fd++)
-		{
-			proc->fd_count[fd] = (unsigned int *)kmalloc(sizeof(unsigned int *));
-			*proc->fd_count[fd] = 0;
-			if (fd < 3)
-			{
-				const char *console = "con:";
-				int flag = fd ? O_WRONLY : O_RDONLY;
-				struct vnode *stdio_vnode; 
-				ret = vfs_open(kstrdup(console), flag, 0, &stdio_vnode);
-				if (ret)
-				{
-					kprintf("stdio is f..d up, aborting...");
-					kfree(proc);
-					return NULL;
-				}
-				proc->fd_table[fd] = stdio_vnode;
-				*proc->fd_count[fd] += 1;
-				proc -> fd_lock[fd] = console_lock;
-				proc->fd_flags[fd] = flag;
-			}
-			else
-			{
-				proc->fd_table[fd] = NULL;
-				proc->fd_lock[fd] = lock_create("FD Lock");
-				proc->fd_flags[fd] = 0;
-			}
-
-			/* Not really sure about my way of implementation */
-			proc -> fd_pos[fd] = 0;
-			proc -> fd_mode[fd] = -1;	
-			proc -> fd_path[fd] = NULL;
+    /* Create file table */
+    proc->fd_table = NULL;
+    if (strcmp(name, "[kernel]") != 0) {
+        proc->fd_table = file_table_create();
+        if (proc->fd_table == NULL) {
+            kfree(proc->p_name);
+            kfree(proc);
+            return NULL;
+        }
+        
+		/* Initialize file descriptor bitmap */
+		proc->fd_table->bitmap = bitmap_create(MAX_FD);
+		if (proc->fd_table->bitmap == NULL) {
+			file_table_destroy(proc->fd_table);
+			kfree(proc->p_name);
+			kfree(proc);
+			return NULL;
 		}
-	proc->child_status = 0;
-	
+        /* Initialize stdin, stdout, stderr */
+        for (int i = 0; i < 3; i++) {
+            struct fd_entry *fde = create_console_fd(i);
+            if (fde == NULL) {
+                /* Cleanup on failure */
+                for (int j = 0; j < i; j++) {
+                    struct fd_entry *prev = array_get(proc->fd_table->entries, j);
+                    if (prev) {
+                        vfs_close(prev->vnode);
+                        kfree(prev->path);
+                        kfree(prev);
+                    }
+                }
+                file_table_destroy(proc->fd_table);
+                kfree(proc->p_name);
+                kfree(proc);
+                return NULL;
+            }
+            
+            /* Add to file table */
+            lock_acquire(proc->fd_table->lock);
+            array_add(proc->fd_table->entries, fde, NULL);
+            bitmap_mark(proc->fd_table->bitmap, i);
+            lock_release(proc->fd_table->lock);
+        }
+    }
 
-	/* Setup its Parent 
-		If a proc is its own parent just set the parent to NULL
-	*/
-	if (strcmp(name, "[kernel]") && proc != curproc)
-		proc -> parent = curproc;
+    /* Setup parent */
+    if (strcmp(name, "[kernel]") != 0 && proc != curproc) {
+        proc->parent = curproc;
+    } else {
+        proc->parent = NULL;
+    }
 
-	/* Setup the condvar (and condvar lock) for this (Needed for Wait) */
-	proc -> cv = cv_create(name);
-	proc -> cv_lock = lock_create(name);
+    /* Setup synchronization */
+    proc->cv = cv_create(name);
+    if (proc->cv == NULL) {
+        if (proc->fd_table != NULL) {
+            file_table_destroy(proc->fd_table);
+        }
+        kfree(proc->p_name);
+        kfree(proc);
+        return NULL;
+    }
+    
+    proc->cv_lock = lock_create(name);
+    if (proc->cv_lock == NULL) {
+        cv_destroy(proc->cv);
+        if (proc->fd_table != NULL) {
+            file_table_destroy(proc->fd_table);
+        }
+        kfree(proc->p_name);
+        kfree(proc);
+        return NULL;
+    }
 
-	
-
-	/* Set the process pid */
-	
-	if (strcmp(name, "[kernel]") && proc != curproc){
-		lock_acquire(pid_lock);
+    /* Set process pid */
+    if (strcmp(name, "[kernel]") != 0) {
+        lock_acquire(pid_lock);
         proctable_add(proc);
         lock_release(pid_lock);
-	} else {
-		/* Process 0 is NULL - Init is the 1st process
-		 * Make sure pid is consistant with 
-		*/
-		
-		bitmap_mark(pid_bitmap, 0);
-		array_add(process_table, 0x0, &rip);
-		proctable_add(proc);
-	}
-	return proc;
+    } else {
+        /* Kernel process setup */
+        bitmap_mark(pid_bitmap, 0);
+        array_add(process_table, NULL, &rip);
+        proctable_add(proc);
+    }
+    
+    return proc;
 }
 
 static void proctable_add(struct proc *proc)
@@ -218,6 +236,11 @@ proc_destroy(struct proc *proc)
 		VOP_DECREF(proc->p_cwd);
 		proc->p_cwd = NULL;
 	}
+
+	if (proc->fd_table != NULL) {
+        file_table_destroy(proc->fd_table);
+        proc->fd_table = NULL;
+    }
 
 	/* VM fields */
 	if (proc->p_addrspace) {
@@ -283,20 +306,6 @@ proc_destroy(struct proc *proc)
 	// {
 	// 	lock_destroy(proc -> fd_lock[i]);
 	// }
-	
-
-	/* Free the file-descriptor table 
-		** Hoping things dont blow up by this :)
-		** Things blew up so I removed this 
-	*/
-	size_t i;
-	for (i = 0; i < MAX_FD; i++)
-	{
-		if (proc->fd_count[i] != NULL)
-		{
-			kfree(proc->fd_count[i]);
-		}
-	}
 
 	if(proc->p_name != NULL)
 	 	kfree(proc->p_name);
@@ -368,11 +377,7 @@ proc_create_runprogram(const char *name)
 
 /*
  * Add a thread to a process. Either the thread or the process might
- * or might not be current.
- *
- * Turn off interrupts on the local cpu while changing t_proc, in
- * case it's current, to protect against the as_activate call in
- * the timer interrupt context switch, and any other implicit uses
+ * or might not be current.>ch, and any other implicit uses
  * of "curproc".
  */
 int
@@ -426,7 +431,7 @@ proc_remthread(struct thread *t)
 
 /*
  * Fetch the address space of (the current) process.
- *
+ *>
  * Caution: address spaces aren't refcounted. If you implement
  * multithreaded processes, make sure to set up a refcount scheme or
  * some other method to make this safe. Otherwis
@@ -466,4 +471,96 @@ proc_setas(struct addrspace *newas)
 	proc->p_addrspace = newas;
 	spinlock_release(&proc->p_lock);
 	return oldas;
+}
+
+
+/* Create a new file table */
+struct file_table *file_table_create(void) {
+    struct file_table *ft = kmalloc(sizeof(struct file_table));
+    if (ft == NULL) {
+        return NULL;
+    }
+    
+    ft->entries = array_create();
+    if (ft->entries == NULL) {
+        kfree(ft);
+        return NULL;
+    }
+    
+    ft->bitmap = bitmap_create(MAX_FD);
+    if (ft->bitmap == NULL) {
+        array_destroy(ft->entries);
+        kfree(ft);
+        return NULL;
+    }
+    
+    ft->lock = lock_create("file_table");
+    if (ft->lock == NULL) {
+        bitmap_destroy(ft->bitmap);
+        array_destroy(ft->entries);
+        kfree(ft);
+        return NULL;
+    }
+    
+    return ft;
+}
+
+/* Destroy a file table */
+void file_table_destroy(struct file_table *ft) {
+    if (ft == NULL) return;
+    
+    /* Clean up all file descriptors */
+    lock_acquire(ft->lock);
+	int array_size = array_num(ft->entries);
+    for (int i = array_size - 1; i >= 0; i--) {
+        struct fd_entry *fde = array_get(ft->entries, i);
+        if (fde != NULL) {
+            if (fde->vnode != NULL) {
+                vfs_close(fde->vnode);
+				/* Maybe we will change it later */
+				fde->count--;
+            }
+			if (fde->count == 0) {
+				if (fde->path != NULL)
+				{
+					kfree(fde->path);
+				}
+				if (fde->lock != NULL && fde->lock != console_lock)
+				{
+					lock_destroy(fde->lock);
+				}
+				kfree(fde);
+			}
+		}
+		array_remove(ft->entries, i);
+	}
+	array_destroy(ft->entries);
+    lock_release(ft->lock);
+    bitmap_destroy(ft->bitmap);
+    lock_destroy(ft->lock);
+    kfree(ft);
+}
+
+/* Create fd_entry for console */
+static struct fd_entry *create_console_fd(int fd_num) {
+    struct fd_entry *fde = kmalloc(sizeof(struct fd_entry));
+    if (fde == NULL) return NULL;
+    
+    const char *console = "con:";
+    int flag = fd_num ? O_WRONLY : O_RDONLY;
+    
+    int ret = vfs_open(kstrdup(console), flag, 0, &fde->vnode);
+    if (ret) {
+        kfree(fde);
+        return NULL;
+    }
+    
+    fde->pos = 0;
+    fde->lock = console_lock;  /* Shared console lock */
+    fde->count = 1;
+    fde->mode = 0;
+    fde->flags = flag;
+    fde->path = kstrdup(console);
+    
+    return fde;
 }

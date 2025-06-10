@@ -52,8 +52,9 @@ struct lock* pid_lock;
 struct bitmap* pid_bitmap;
 struct array* process_table;
 
-/* TODO: Change this instance */
+
 #define MAX_FD OPEN_MAX // Maximum amount of open files a process could have
+
 /*
  * Process structure.
  *
@@ -85,33 +86,14 @@ struct proc {
 
 	/* VFS */
 	struct vnode *p_cwd;		/* current working directory */
-	
-	struct vnode *fd_table[MAX_FD];		/* file descriptor table - 
-										 * TODO : Change with array type
-										 * TODO 2 : add a locking system
-										*/
-	
-	off_t fd_pos[MAX_FD]; /* Find Position To Write in File*/
 
-	struct lock *fd_lock[MAX_FD]; /* File Locks */
-
-	unsigned int *fd_count[MAX_FD]; /* File reference counter (might delete this!!)*/
-
-	char *fd_path[MAX_FD]; /* File Names */
-
-	mode_t fd_mode[MAX_FD]; /* File Modes*/
-
-	int fd_flags[MAX_FD]; /* File Modes*/
-
-	struct lock *table_lock;
+	struct file_table *fd_table; /* File descriptor table */
 
 	int stdin;	/* stdin fd */
 
 	int stdout; /* stdout fd */
 
 	int stderr; /* stderr fd */
-
-	unsigned max_fd;
 
 	/* Communication with parent */
 	struct proc *parent;
@@ -124,6 +106,21 @@ struct proc {
 	/* add more material here as needed */
 };
 
+struct file_table {
+	struct array* entries; /* File descriptor table */
+	struct bitmap* bitmap; /* Bitmap for file descriptors */
+	struct lock* lock; /* Lock for the file table */
+};
+
+struct fd_entry {
+	struct vnode *vnode; /* Vnode for the file */
+	off_t pos; /* Position in the file */
+	struct lock *lock; /* Lock for this file */
+	unsigned int count; /* Reference count for this file */
+	mode_t mode; /* Mode of the file */
+	int flags; /* Flags for the file */
+	char *path; /* Path to the file */
+};
 
 
 /* This is the process structure for the kernel and for kernel-only threads. */

@@ -8,6 +8,8 @@
 #include <copyinout.h>
 
 
+static int copy_file_descriptors(struct proc *src, struct proc *dst); 
+
 /* execv replaces the currently executing program with
  * a newly loaded program image.
  * This occurs within one process; the process id is unchanged.
@@ -184,68 +186,77 @@ int sys_execv(const char *program, char *argv[], int *retval){
  * the "new" one, or "child"), has a new, unique process id,
  *  and in the other (the "parent") the process id is unchanged. 
  */
-int sys_fork(struct trapframe *tf, int *retval){
+int sys_fork(struct trapframe *tf, int *retval) {
     struct proc *newproc;
-    // struct addrspace *new_as;
-    // vaddr_t stackptr;
     int err;
-	newproc = proc_create_runprogram(curproc -> p_name /* name */);
-	if (newproc == NULL) {
-		return ENOMEM;
-    }
-
-	
-
-    struct trapframe *new_tf;
-    new_tf = kmalloc(sizeof(*tf));
-
-    memcpy(new_tf, tf, sizeof(*tf));
-
-    newproc -> parent = curproc;
-    DEBUG(DB_GEN, "\nProc Forked %p (%d) - Parent %p (%d) \n", newproc, newproc -> pid, curproc, curproc->pid);
-    /* VFS fields */
-
-    for (size_t i = 0; i < MAX_FD; i++)
-    {
-        lock_acquire(curproc -> fd_lock[i]);
-        newproc -> fd_table[i] = curproc -> fd_table[i];
-        newproc -> fd_pos[i] = curproc -> fd_pos[i];
-        newproc -> fd_lock[i] = curproc -> fd_lock[i];
-        newproc -> fd_flags[i] = curproc -> fd_flags[i];
-         
-       /* We need to add the locking system for this */ 
-        newproc -> fd_count[i] = curproc -> fd_count[i];
-        if (newproc->fd_table[i] != NULL){
-            *newproc->fd_count[i] += 1;
-            VOP_INCREF(newproc -> fd_table[i]);
-        }
-        lock_release(curproc -> fd_lock[i]); 
-    }
-
-    newproc -> stdin = curproc -> stdin;
-    newproc -> stdout = curproc -> stdout;
-    newproc -> stderr = curproc -> stderr;
-    newproc -> exited = false;
-
-    // as_define_stack(newproc->p_addrspace, &stackptr);
-
-    /* VM fields */
-    as_copy(curproc -> p_addrspace, &newproc->p_addrspace);
-
     
-    err = thread_fork(curproc -> p_name/* thread name */,
-			newproc /* new process */,
-			enter_forked_process /* thread function */,
-			new_tf /* thread arg */, 0 /* thread arg */);
-	if (err) {
-		kprintf("thread_fork failed: %s\n", strerror(err)); 
-	    lock_acquire(pid_lock);	
-		proc_destroy(newproc);
+    /* Create new process */
+    newproc = proc_create_runprogram(curproc->p_name);
+    if (newproc == NULL) {
+        return ENOMEM;
+    }
+    
+    /* Copy trap frame */
+    struct trapframe *new_tf = kmalloc(sizeof(*tf));
+    if (new_tf == NULL) {
+        lock_acquire(pid_lock);
+        proc_destroy(newproc);
+        lock_release(pid_lock);
+        return ENOMEM;
+    }
+    memcpy(new_tf, tf, sizeof(*tf));
+    
+    /* Set parent */
+    newproc->parent = curproc;
+    DEBUG(DB_GEN, "\nProc Forked %p (%d) - Parent %p (%d) \n", 
+           newproc, newproc->pid, curproc, curproc->pid);
+    
+    /* Copy file descriptors */
+    if (curproc->fd_table != NULL) {
+        err = copy_file_descriptors(curproc, newproc);
+        if (err) {
+            kfree(new_tf);
+            lock_acquire(pid_lock);
+            proc_destroy(newproc);
+            lock_release(pid_lock);
+            *retval = -1;
+            return err;
+        }
+    }
+    
+    /* Copy stdin/stdout/stderr values */
+    newproc->stdin = curproc->stdin;
+    newproc->stdout = curproc->stdout;
+    newproc->stderr = curproc->stderr;
+    newproc->exited = false;
+    
+    /* Copy address space */
+    err = as_copy(curproc->p_addrspace, &newproc->p_addrspace);
+    if (err) {
+        kfree(new_tf);
+        lock_acquire(pid_lock);
+        proc_destroy(newproc);
         lock_release(pid_lock);
         *retval = -1;
-		return err;
-	}
-    *retval = newproc -> pid;
+        return err;
+    }
+    
+    /* Fork the thread */
+    err = thread_fork(curproc->p_name,
+                      newproc,
+                      enter_forked_process,
+                      new_tf, 0);
+    if (err) {
+        kprintf("thread_fork failed: %s\n", strerror(err));
+        kfree(new_tf);
+        lock_acquire(pid_lock);
+        proc_destroy(newproc);
+        lock_release(pid_lock);
+        *retval = -1;
+        return err;
+    }
+    
+    *retval = newproc->pid;
     return 0;
 }
 
@@ -274,56 +285,34 @@ int sys_getpid(){
  * Note : For now we do not take wait into consideration and think that 
  * we only destroy the process
  */
-int sys_exit(int status){
-    /*
-     * For now we take the easy way out :
-     * 1. We consider that we only have 1 thread 
-     * 
-     * 2. We just signal the parents cv, exit the thread and destroy its process :)
-     * 
-     * 
-     */
-
-    /* If we have a parent (we are not init proc) 
-     *  which is waiting for us, send 
-     *  a signal to parent's cv channel to wake it up
-    */
-    struct proc* parent = curproc->parent;
-    if (parent != NULL)
-    {
+int sys_exit(int status) {
+    struct proc *parent = curproc->parent;
+    
+    /* If we have a parent, signal it */
+    if (parent != NULL) {
         lock_acquire(parent->cv_lock);
         curproc->exited = true;
-        // curproc->parent->waiting_for_pid = 0x0;
         parent->child_status = status;
-        cv_signal(curproc->parent->cv, curproc->parent->cv_lock);
-
-        /* Close all file descriptors
-         *
-         */
-        int close_ret;
-        int close_err;
-        close_ret = 0;
-        for (size_t fd = 0; fd < MAX_FD; fd++)
-        {
-            if (curproc->fd_table[fd] != NULL)
-            {
-                    close_err = sys_close(fd, &close_ret);
-                    if (close_err)
-                    {
-                        kprintf("Error in closing fd number : %d\n", fd);
-                    } 
-            }
-        }
-        DEBUG(DB_PROC, "Proc Exited %p\n", curproc);
-        /*
-         * Detach from our process. You might need to move this action
-         * around, depending on how your wait/exit works.
-         */
-        proc_remthread(curthread);
+        cv_signal(parent->cv, parent->cv_lock);
         lock_release(parent->cv_lock);
-        thread_exit();
     }
-    /* We would not get here */
+    
+    /* 
+     * File descriptors will be cleaned up automatically when 
+     * proc_destroy() calls file_table_destroy()
+     * No need to manually close them here
+     */
+    
+    DEBUG(DB_PROC, "Proc Exited %p (%d)\n", curproc, curproc->pid);
+    
+    /* Detach from our process */
+    proc_remthread(curthread);
+    
+    /* Thread exit - doesn't return */
+    thread_exit();
+    
+    /* Should never get here */
+    panic("sys_exit: thread_exit returned\n");
     return 0;
 }
 
@@ -431,4 +420,38 @@ int sys_wait(pid_t pid, int *status, int options, int *retval){
 
     err = 0;
     return err;
+}
+
+
+
+/* Helper function to copy file descriptors during fork */
+static int copy_file_descriptors(struct proc *src, struct proc *dst) {
+    KASSERT(src != NULL);
+    KASSERT(dst != NULL);
+    KASSERT(src->fd_table != NULL);
+    KASSERT(dst->fd_table != NULL);
+    
+    lock_acquire(src->fd_table->lock);
+    lock_acquire(dst->fd_table->lock);
+    /* Shallow copy all the file table entries 
+     * and increment the reference count
+     * for each file descriptor.
+     */
+    int array_size = array_num(src->fd_table->entries);
+    array_preallocate(dst->fd_table->entries, array_size);
+    for (int i = 0; i < array_size; i++) {
+        struct fd_entry *src_fde = array_get(src->fd_table->entries, i);
+        if (src_fde != NULL) {
+            src_fde->count++;
+            array_set(dst->fd_table->entries, i, src_fde);
+            
+            /* Mark the bitmap */
+            bitmap_mark(dst->fd_table->bitmap, i);
+        }
+    }
+    
+    lock_release(dst->fd_table->lock);
+    lock_release(src->fd_table->lock);
+    
+    return 0;
 }
