@@ -134,10 +134,13 @@ int sys_execv(const char *program, char *argv[], int *retval){
 		return err;
 	}
 
-	
+    char **kernel_argv = kmalloc(argc * sizeof(char *));
+    for (i = 0; i < (size_t)argc; i++)
+    {
+        kernel_argv[i] = kstrdup(argv[i]);
+    }
 
-	/* Put arguments onto the stack */
-	char* foo; /* this is the variable to move things between old and new address space */
+    /* Put arguments onto the stack */
 	vaddr_t strloc = (vaddr_t)(stackptr - all);
 
 	/* actuall strings starting location */
@@ -146,31 +149,21 @@ int sys_execv(const char *program, char *argv[], int *retval){
 	/* argv pointer location */
 	vaddr_t argptr = strloc - (argc + 1) * sizeof(char *);
 	*((vaddr_t *)argptr + argc) = 0;
-	for (i = 0; i < (size_t)argc; i++)
+    proc_setas(as);
+    as_activate();
+    for (i = 0; i < (size_t)argc; i++)
 	{
-
 		/* Move arguments from old stack to new one */
-		/* TODO : copy address space instead of this (do it after fixing virtual memory)*/
-		proc_setas(old_as);
-		as_activate();
-
-		foo = kmalloc(strlen(argv[i]) + 1);
-		strcpy(foo, argv[i]);
-
-		proc_setas(as);
-		as_activate();
-
 		*((vaddr_t *)argptr + i) = strloc;
-		strcpy((char *)strloc, foo);
-		strloc += strlen(foo) + 1;
-		kfree(foo);
-		foo = NULL;
+		strcpy((char *)strloc, kernel_argv[i]);
+		strloc += strlen(kernel_argv[i]) + 1;
+        kfree(kernel_argv[i]); // Free the kernel argument string
 	}
+    kfree(kernel_argv); // Free the array of kernel arguments
 
-	/* Destroy old address space after migration is done */
-	as_destroy(old_as);
+    as_destroy(old_as); // Now won't do TLB operations
 
-	/* Warp to user mode. */
+    /* Warp to user mode. */
 	enter_new_process(argc /*argc*/, (void *)argptr /*userspace addr of argv*/,
 			  NULL /*userspace addr of environment*/,
 			  argptr , entrypoint);

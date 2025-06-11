@@ -45,7 +45,7 @@
 #include <err.h>
 #include <test161/test161.h>
 
-#define _PATH_MYSELF "/testbin/bigexec"
+#define _PATH_MYSELF "/testbin/myexec"
 
 
 int

@@ -1,4 +1,5 @@
 #include <types.h>
+#include <spl.h>
 #include <proc.h>
 #include <spinlock.h>
 #include <synch.h>
@@ -307,9 +308,23 @@ unsigned int coremap_used_bytes(void){
 }
 
 /* TLB shootdown handling called from interprocessor_interrupt */
-void vm_tlbshootdown(const struct tlbshootdown * shootdown){
-    kprintf("shootdown %p\n", shootdown);
-    return;
+void vm_tlbshootdown(const struct tlbshootdown *ts) {
+    KASSERT(ts != NULL);
+    
+    switch (ts->type) {
+        case TLBSHOOTDOWN_ASID:
+            if (ts->asid != 0) {
+                tlb_invalidate_asid_entries(ts->asid);
+            }
+            break;
+            
+        case TLBSHOOTDOWN_ALL:
+            tlb_shootdown_all();
+            break;
+            
+        default:
+            panic("vm_tlbshootdown: Unknown shootdown type %d\n", ts->type);
+    }
 }
 
 
@@ -401,19 +416,19 @@ void free_page_table(void *page_table, size_t level){
 /* Fault handling function called by trap code */
 int vm_fault(int faulttype, vaddr_t faultaddress){
     if (faultaddress >= USERSPACETOP) {
-        kprintf("vm_fault: faultaddress 0x%x is above USERSPACETOP 0x%x\n", faultaddress, USERSPACETOP);
+        DEBUG(DB_VM,"vm_fault: faultaddress 0x%x is above USERSPACETOP 0x%x\n", faultaddress, USERSPACETOP);
         return EFAULT; // Invalid address
     }
     if (faulttype != VM_FAULT_READ && faulttype != VM_FAULT_WRITE && faulttype != VM_FAULT_READONLY) {
-        kprintf("vm_fault: invalid fault type %d\n", faulttype);
+        DEBUG(DB_VM,"vm_fault: invalid fault type %d\n", faulttype);
         return EINVAL; // Invalid fault type
     }
     if (curproc == NULL || curproc->p_addrspace == NULL) {
-        kprintf("vm_fault: no current process or address space\n");
+        DEBUG(DB_VM,"vm_fault: no current process or address space\n");
         return EFAULT; // No current process or address space
     }
     if (faulttype == VM_FAULT_READONLY) {
-        kprintf("vm_fault: read-only fault type is not supported\n");
+        DEBUG(DB_VM,"vm_fault: read-only fault type is not supported\n");
         return EFAULT; // Read-only fault type is not supported
     }
 
@@ -424,7 +439,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         if ((faultaddress >= region->start) && (faultaddress < region->start + region->size)) {
             if ((faulttype == VM_FAULT_READ && !region->readable) ||
                 (faulttype == VM_FAULT_WRITE && !(region->writeable || region->temp_write))) {
-                kprintf("vm_fault: permission denied for faultaddress 0x%x in region [%p, %p)\n",
+                DEBUG(DB_VM,"vm_fault: permission denied for faultaddress 0x%x in region [%p, %p)\n",
                         faultaddress, (void *)region->start, (void *)(region->start + region->size));
                 return EFAULT; // Permission denied
             }
@@ -440,7 +455,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         region = curproc->p_addrspace->heap_region;
     }
     if (region == NULL) {
-        kprintf("vm_fault: faultaddress 0x%x is not in any valid region\n", faultaddress);
+        DEBUG(DB_VM, "vm_fault: faultaddress 0x%x is not in any valid region\n", faultaddress);
         return EFAULT; // No valid region found for the fault address
     }
 
@@ -466,14 +481,18 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         pt->entries[third_level_index].executable = region->executable;
     } 
     pt->entries[third_level_index].accessed = 1;
-
+    int frame = pt->entries[third_level_index].frame;
+    int valid = pt->entries[third_level_index].valid;
+    int dirty = pt->entries[third_level_index].dirty;
     // Updating the TLB entry
     // We need to set the TLBHI and TLBLO entries 
     uint32_t tlbhi = faultaddress & TLBHI_VPAGE;
     tlbhi |= (curproc->p_addrspace->asid << TLBHI_ASID_SHIFT) & TLBHI_PID;
-    uint32_t tlblo = (PAGE_TO_PADDR(pt->entries[third_level_index].frame)& TLBLO_PPAGE) |
-                     (pt->entries[third_level_index].dirty ? TLBLO_DIRTY : 0) |
-                     (pt->entries[third_level_index].valid ? TLBLO_VALID : 0);
+    uint32_t tlblo = (PAGE_TO_PADDR(frame)& TLBLO_PPAGE) |
+                     (dirty ? TLBLO_DIRTY : 0) |
+                     (valid ? TLBLO_VALID : 0);
+    DEBUG(DB_VM, "vm_fault ---> addr : 0x%x, third_level_index : %x, frame : %x, paddr : %x, loo : %x, tlbhi : 0x%x, tlblo : 0x%x\n",
+          faultaddress, third_level_index, pt->entries[third_level_index].frame, PAGE_TO_PADDR(pt->entries[third_level_index].frame), (PAGE_TO_PADDR(pt->entries[third_level_index].frame)& TLBLO_PPAGE), tlbhi, tlblo);
     tlb_random(tlbhi, tlblo);
     return 0;
 }
@@ -482,7 +501,8 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
  * Invalidate all TLB entries for a specific ASID.
  * This function is called when an address space is destroyed.
  */
-void tlb_invalidate_asid_entries(uint32_t asid) {
+void tlb_invalidate_asid_entries(uint32_t asid) { 
+    int spl = splhigh();
     for (int i = 0; i < NUM_TLB; i++) {
         uint32_t entryhi, entrylo;
         tlb_read(&entryhi, &entrylo, i);
@@ -490,12 +510,15 @@ void tlb_invalidate_asid_entries(uint32_t asid) {
             tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
         }
     }
+    splx(spl);
 }
 
 /* Do a full tlb shootdown */
 void tlb_shootdown_all(void) {
     // Invalidate all TLB entries
+    int spl = splhigh();
     for (int i = 0; i < NUM_TLB; i++) {
         tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
     }
+    splx(spl);
 }

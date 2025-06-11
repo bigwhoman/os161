@@ -36,6 +36,8 @@
 #include <proc.h>
 #include <spl.h>
 #include <lib.h>
+#include <cpu.h>
+#include <current.h>
 
 
 
@@ -251,12 +253,25 @@ as_destroy(struct addrspace *as)
 	lock_destroy(as->addrlock); /* Destroy the lock */
 	/* Free the address space structure */
 	if (as->asid != 0) {
-		/* If the ASID is not 0, free the ASID */
-		spinlock_acquire(&addrspace_lock);
-		tlb_invalidate_asid_entries(as->asid); /* Invalidate TLB entries for this ASID */
-		bitmap_unmark(asid_bitmap, as->asid); /* Unmark the ASID */
-		spinlock_release(&addrspace_lock);
-	}
+        struct tlbshootdown shootdown;
+        shootdown.asid = as->asid;
+        shootdown.type = TLBSHOOTDOWN_ASID;
+        
+        spinlock_acquire(&addrspace_lock);
+        
+        // Send shootdown to ALL other CPUs
+        unsigned i, numcpus;
+        numcpus = cpuarray_num(&allcpus);
+        
+        for (i = 0; i < numcpus; i++) {
+            struct cpu *target_cpu = cpuarray_get(&allcpus, i); 
+                // Other CPUs - send IPI
+                ipi_tlbshootdown(target_cpu, &shootdown);
+        }
+        
+        bitmap_unmark(asid_bitmap, as->asid);
+        spinlock_release(&addrspace_lock);
+    }
 
 	kfree(as);
 }

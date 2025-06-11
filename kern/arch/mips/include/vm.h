@@ -163,11 +163,13 @@ paddr_t ram_getfirstfree(void);
  */
 
 struct tlbshootdown {
-	/*
-	 * Change this to what you need for your VM design.
-	 */
-	int ts_placeholder;
+    uint32_t asid;           // ASID to invalidate (0 means invalidate all)
+    int type;                // Type of shootdown
 };
+
+// Shootdown types
+#define TLBSHOOTDOWN_ASID    1  // Invalidate specific ASID
+#define TLBSHOOTDOWN_ALL     2  // Invalidate entire TLB
 
 #define TLBSHOOTDOWN_MAX 16
 
