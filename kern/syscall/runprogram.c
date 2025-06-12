@@ -103,58 +103,68 @@ int open_copy_prog(char *progname, struct addrspace **as, vaddr_t *entrypoint){
  * 
  * 
  */
-int
-runprogram(char *progname, int argc, char *argv[])
+int runprogram(char *progname, int argc, char *argv[])
 {
-	struct addrspace *as;
-	vaddr_t entrypoint, stackptr;
-	int result;
-	size_t i, all;
-	all = 0;
-	as = NULL;
-	for (i = 0; i < (size_t)argc; i++)
-	{
-		all += strlen(argv[i]) + 1;
-	}
-	
-	
-	result = open_copy_prog(progname, &as, &entrypoint);
-	if (result)
-		return result;
-	
-
-	/* Define the user stack in the address space */
-	result = as_define_stack(as, &stackptr);
-	if (result) {
-		/* p_addrspace will go away when curproc is destroyed */
-		return result;
-	}	
-
-	/* Put arguments on the stack */
-
-	vaddr_t strloc = (vaddr_t)(stackptr - all);
-	strloc &= 0xfffffffc;
-
-	/* Point to arguments (Last argument is always NULL)*/
-	vaddr_t argptr = strloc - (argc + 1) * sizeof(char *); 
-	*((vaddr_t *)argptr + argc) = 0;
-	for (i = 0; i < (size_t)argc; i++)
-	{
-		*((vaddr_t *)argptr + i) = strloc;
-		strcpy((char *)strloc, argv[i]);
-		strloc += strlen(argv[i]) + 1;
-	}
-
-
-
-
-	/* Warp to user mode. */
-	enter_new_process(argc /*argc*/, (void *)argptr /*userspace addr of argv*/,
-			  NULL /*userspace addr of environment*/,
-			  argptr , entrypoint);
-
-	/* enter_new_process does not return. */
-	panic("enter_new_process returned\n");
-	return EINVAL;
+    struct addrspace *as;
+    vaddr_t entrypoint, stackptr;
+    int result;
+    size_t i, all;
+    
+    all = 0;
+    as = NULL;
+    
+    // Calculate total argument size
+    for (i = 0; i < (size_t)argc; i++) {
+        all += strlen(argv[i]) + 1;
+    }
+    
+    // Load program
+    result = open_copy_prog(progname, &as, &entrypoint);
+    if (result) {
+        return result;
+    }
+    
+    // Define stack
+    result = as_define_stack(as, &stackptr);
+    if (result) {
+        as_destroy(as);
+        return result;
+    }
+    
+    // Set up stack layout
+    vaddr_t strloc = (vaddr_t)(stackptr - all);
+    strloc &= 0xfffffffc;
+    vaddr_t argptr = strloc - (argc + 1) * sizeof(char *);
+    int empty_arg = 0; // NULL terminator for argv
+    // Copy arguments using safe kernel functions
+    result = copyout(&empty_arg, (userptr_t)((vaddr_t *)argptr + argc), sizeof(vaddr_t)); // NULL terminator
+    if (result) {
+		kprintf("copyout failed: %s\n", strerror(result));
+        return result;
+    }
+    
+    for (i = 0; i < (size_t)argc; i++) {
+        // Copy pointer to string
+        result = copyout(&strloc, (userptr_t)((vaddr_t *)argptr + i), sizeof(vaddr_t));
+        if (result) {
+			kprintf("copyout failed: %s\n", strerror(result));
+            return result;
+        }
+        
+        // Copy string itself
+        result = copyoutstr(argv[i], (userptr_t)strloc, strlen(argv[i]) + 1, NULL);
+        if (result) {
+			kprintf("copyout failed: %s\n", strerror(result));
+            return result;
+        }
+        
+        strloc += strlen(argv[i]) + 1;
+    }
+    
+    // Enter user mode
+    enter_new_process(argc, (void *)argptr, NULL, argptr, entrypoint);
+    
+    panic("enter_new_process returned\n");
+    return EINVAL;
 }
 

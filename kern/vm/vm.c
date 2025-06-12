@@ -459,7 +459,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         KASSERT(new_page_frame < total_pages); // Ensure the page frame is within bounds
         pt->entries[third_level_index].frame = new_page_frame;
         pt->entries[third_level_index].valid = 1;
-        pt->entries[third_level_index].dirty = (faulttype == VM_FAULT_WRITE);
+        pt->entries[third_level_index].dirty = 1; 
         pt->entries[third_level_index].readable = region->readable;
         pt->entries[third_level_index].writable = region->writeable || region->temp_write;
         /* This doesn't actually matter as MIPS does not have hardware execute bits*/

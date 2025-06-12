@@ -13,9 +13,7 @@ static int copy_file_descriptors(struct proc *src, struct proc *dst);
 /* execv replaces the currently executing program with
  * a newly loaded program image.
  * This occurs within one process; the process id is unchanged.
- *
- *
- * TODO : Handle Errors */
+ */
 int sys_execv(const char *program, char *argv[], int *retval){
 	struct addrspace *as;
 	struct addrspace *old_as;
@@ -29,6 +27,9 @@ int sys_execv(const char *program, char *argv[], int *retval){
     char *argin;
 	argc = 0;
     got = 0;
+    all = 0;
+    struct array *kernel_argv;
+    kernel_argv = array_create();
     
     old_as = curproc ->p_addrspace;
     if (argv == NULL)
@@ -56,6 +57,12 @@ int sys_execv(const char *program, char *argv[], int *retval){
         if (err)
         {
             kfree(argin);
+            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            {
+                kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
+                array_remove(kernel_argv, j);     // Remove the string from the array
+            }
+            array_destroy(kernel_argv); // Free the array structure
             *retval = -1;
             return err;
         }
@@ -63,6 +70,12 @@ int sys_execv(const char *program, char *argv[], int *retval){
         {
             err = ENOENT;
             kfree(argin);
+            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            {
+                kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
+                array_remove(kernel_argv, j);     // Remove the string from the array
+            }
+            array_destroy(kernel_argv); // Free the array structure
             *retval = -1;
             return err;
         }
@@ -70,12 +83,24 @@ int sys_execv(const char *program, char *argv[], int *retval){
         if (err)
         {
             kfree(argin);
+            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            {
+                kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
+                array_remove(kernel_argv, j);     // Remove the string from the array
+            }
+            array_destroy(kernel_argv); // Free the array structure
             *retval = -1;
             return err;
         }
         if (argin == NULL || got <= 0)
         {
             kfree(argin);
+            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            {
+                kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
+                array_remove(kernel_argv, j);     // Remove the string from the array
+            }
+            array_destroy(kernel_argv); // Free the array structure
             err = ENOENT;
             *retval = -1;
             return err;
@@ -84,22 +109,22 @@ int sys_execv(const char *program, char *argv[], int *retval){
         if (left < 0){
             *retval = -1;
             kfree(argin);
+            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            {
+                kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
+                array_remove(kernel_argv, j); // Remove the string from the array
+            }
+            array_destroy(kernel_argv); // Free the array structure
             err = E2BIG;
             return err;
         }
 
         
         argc++;   
+        array_add(kernel_argv, kstrdup(argin),NULL);
+        all += got + 1;
 	}
-    
-	all = 0;
 	
-	/* Copy the arguments from old stack */
-	for (i = 0; i < (size_t)argc; i++)
-	{
-        /* Need kfree but somehow test fails when we do kfree here :/// */  
-		all += strlen(argv[i]) + 1;
-	}
 
 	err = copyinstr((const_userptr_t)program, prog, PATH_MAX,(size_t *)retval);
 
@@ -134,14 +159,6 @@ int sys_execv(const char *program, char *argv[], int *retval){
 		return err;
 	}
 
-    char **kernel_argv = kmalloc(argc * sizeof(char *));
-    for (i = 0; i < (size_t)argc; i++)
-    {
-        kernel_argv[i] = kstrdup(argv[i]);
-    }
-
-    proc_setas(as);
-    as_activate();
 
     as_destroy(old_as); 
     /* Put arguments onto the stack */
@@ -151,19 +168,64 @@ int sys_execv(const char *program, char *argv[], int *retval){
 	strloc &= 0xfffffffc;
 
 	/* argv pointer location */
+    int empty_arg = 0;
 	vaddr_t argptr = strloc - (argc + 1) * sizeof(char *);
-	*((vaddr_t *)argptr + argc) = 0;
+	err = copyout(&empty_arg, (userptr_t)((vaddr_t *)argptr + argc), sizeof(vaddr_t));
+    if (err) {
+        kprintf("copyout failed: %s\n", strerror(err));
+        kfree(argin);
+        for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+        {
+            kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
+            array_remove(kernel_argv, j);     // Remove the string from the array
+        }
+        array_destroy(kernel_argv); // Free the array structure
+        *retval = -1;
+        return err;
+    }
     
     for (i = 0; i < (size_t)argc; i++)
 	{
 		/* Move arguments from old stack to new one */
-		*((vaddr_t *)argptr + i) = strloc;
-		strcpy((char *)strloc, kernel_argv[i]);
-		strloc += strlen(kernel_argv[i]) + 1;
-        kfree(kernel_argv[i]); // Free the kernel argument string
+        err = copyout((void *)strloc, (userptr_t)((vaddr_t *)argptr + i), sizeof(vaddr_t));
+        if (err)
+        {
+            kprintf("copyout failed: %s\n", strerror(err));
+            kfree(argin);
+            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            {
+                kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
+                array_remove(kernel_argv, j);     // Remove the string from the array
+            }
+            array_destroy(kernel_argv); // Free the array structure
+            *retval = -1;
+            return err;
+        }
+        // strcpy((char *)strloc, kernel_argv[i]);
+        char *kernel_arg = array_get(kernel_argv, i);
+        err = copyoutstr(kernel_arg, (userptr_t)strloc, strlen(kernel_arg) + 1, NULL);
+        if (err)
+        {
+            kprintf("copyout failed: %s\n", strerror(err));
+            kfree(argin);
+            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            {
+                kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
+                array_remove(kernel_argv, j);     // Remove the string from the array
+            }
+            array_destroy(kernel_argv); // Free the array structure
+            *retval = -1;
+            return err;
+        }
+        strloc += strlen(kernel_arg) + 1;
+        kfree(kernel_arg); // Free the kernel argument string
 	}
-    kfree(kernel_argv); // Free the array of kernel arguments
-
+    for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+    {
+        kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
+        array_remove(kernel_argv, j);     // Remove the string from the array
+    }
+    array_destroy(kernel_argv); // Free the array structure
 
     /* Warp to user mode. */
 	enter_new_process(argc /*argc*/, (void *)argptr /*userspace addr of argv*/,
