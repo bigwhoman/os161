@@ -38,7 +38,23 @@
 #include <lib.h>
 #include <cpu.h>
 #include <current.h>
-
+#include <types.h>
+#include <kern/errno.h>
+#include <lib.h>
+#include <array.h>
+#include <cpu.h>
+#include <spl.h>
+#include <spinlock.h>
+#include <wchan.h>
+#include <thread.h>
+#include <threadlist.h>
+#include <threadprivate.h>
+#include <proc.h>
+#include <current.h>
+#include <synch.h>
+#include <addrspace.h>
+#include <mainbus.h>
+#include <vnode.h>
 
 
 /* Addrspace Spinlock */
@@ -247,31 +263,20 @@ as_destroy(struct addrspace *as)
 	if (as->heap_region != NULL) {
 		kfree(as->heap_region);
 	}
-	/* Free the page table */
-	free_page_table(as->pt, 1); /* Free the page table */
-	kfree(as->pt); /* Free the page table structure */
-	lock_destroy(as->addrlock); /* Destroy the lock */
+	
 	/* Free the address space structure */
-	if (as->asid != 0) {
-        struct tlbshootdown shootdown;
-        shootdown.asid = as->asid;
-        shootdown.type = TLBSHOOTDOWN_ASID;
-        
+	if (as->asid != 0) { 
         spinlock_acquire(&addrspace_lock);
-        
         // Send shootdown to ALL other CPUs
-        unsigned i, numcpus;
-        numcpus = cpuarray_num(&allcpus);
-        
-        for (i = 0; i < numcpus; i++) {
-            struct cpu *target_cpu = cpuarray_get(&allcpus, i); 
-                // Other CPUs - send IPI
-                ipi_tlbshootdown(target_cpu, &shootdown);
-        }
+		shootdown_all_asid(as->asid);
         
         bitmap_unmark(asid_bitmap, as->asid);
         spinlock_release(&addrspace_lock);
     }
+	/* Free the page table */
+	free_page_table(as->pt, 1); /* Free the page table */
+	kfree(as->pt);				/* Free the page table structure */
+	lock_destroy(as->addrlock); /* Destroy the lock */
 
 	kfree(as);
 }

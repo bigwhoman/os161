@@ -140,6 +140,10 @@ int sys_execv(const char *program, char *argv[], int *retval){
         kernel_argv[i] = kstrdup(argv[i]);
     }
 
+    proc_setas(as);
+    as_activate();
+
+    as_destroy(old_as); 
     /* Put arguments onto the stack */
 	vaddr_t strloc = (vaddr_t)(stackptr - all);
 
@@ -149,8 +153,7 @@ int sys_execv(const char *program, char *argv[], int *retval){
 	/* argv pointer location */
 	vaddr_t argptr = strloc - (argc + 1) * sizeof(char *);
 	*((vaddr_t *)argptr + argc) = 0;
-    proc_setas(as);
-    as_activate();
+    
     for (i = 0; i < (size_t)argc; i++)
 	{
 		/* Move arguments from old stack to new one */
@@ -161,7 +164,6 @@ int sys_execv(const char *program, char *argv[], int *retval){
 	}
     kfree(kernel_argv); // Free the array of kernel arguments
 
-    as_destroy(old_as); // Now won't do TLB operations
 
     /* Warp to user mode. */
 	enter_new_process(argc /*argc*/, (void *)argptr /*userspace addr of argv*/,

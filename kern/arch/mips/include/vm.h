@@ -121,6 +121,42 @@ struct coremap_entry {
 
 };
 
+
+struct vm_region {
+        vaddr_t start;      /* start address of region */
+        size_t size;       /* size of region */
+        unsigned int readable : 1; /* region is readable */
+        unsigned int writeable : 1; /* region is writeable */
+        unsigned int executable : 1; /* region is executable */
+        unsigned int temp_write : 1; /* temporary write permission */
+        struct vm_region *next; /* next region in linked list */
+};
+
+/*
+ * Page table entry - maps a virtual address to a physical address.
+ * Contains flags for validity, dirty, accessed, and read-only status.
+ */
+struct page_table_entry {
+        unsigned int frame : 16; /* physical address */
+        unsigned int valid : 1; /* valid bit */
+        unsigned int dirty : 1; /* dirty bit */
+        unsigned int accessed : 1; /* accessed bit */
+        unsigned int readable : 1; /* read-only bit */
+        unsigned int writable : 1; /* read-only bit */
+        unsigned int executable : 1; /* read-only bit */
+};
+
+#define PAGE_TABLE_SIZE (PAGE_SIZE / sizeof(struct page_table_entry)) /* Size of the page table */
+
+/*
+ * Page table - maps virtual addresses to physical addresses.
+ * Each process has its own page table.
+ * The page table is an array of page table entries.
+ */
+struct page_table {
+        struct page_table_entry entries[PAGE_TABLE_SIZE]; /* array of page table entries */
+};
+
 struct coremap_entry* coremap;
 size_t first_free_page;
 size_t first_page;
@@ -162,9 +198,16 @@ paddr_t ram_getfirstfree(void);
  * We'll take up to 16 invalidations before just flushing the whole TLB.
  */
 
+typedef enum {
+	TLB_SHOOTDOWN_ALL, 
+	TLB_SHOOTDOWN_ASID,
+	TLB_SHOOTDOWN_INDIVIDUAL
+} shootdown_type_t;
+
 struct tlbshootdown {
-    uint32_t asid;           // ASID to invalidate (0 means invalidate all)
-    int type;                // Type of shootdown
+    uint8_t asid;           // ASID to invalidate
+    shootdown_type_t type;                // Type of shootdown
+	vaddr_t vaddr;         // Virtual address to invalidate (if applicable)
 };
 
 // Shootdown types

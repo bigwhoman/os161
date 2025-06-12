@@ -1256,3 +1256,11 @@ void thread_wait_for_count(unsigned tc)
 	}
 	spinlock_release(&thread_count_lock);
 }
+
+
+struct cpu *cpu_get_by_number(unsigned cpu_num) {
+    if (cpu_num >= cpuarray_num(&allcpus)) {
+        return NULL;
+    }
+    return cpuarray_get(&allcpus, cpu_num);
+}

@@ -8,7 +8,10 @@
 #include <vm.h>
 #include <addrspace.h>
 #include <kern/errno.h>
+#include <cpu.h>
 
+
+void save_tlb_state_to_page_tables(void);
 void init_coremap(paddr_t , size_t );
 paddr_t get_last_level_pt(vaddr_t vaddr, struct addrspace *as);
 unsigned int coremap_alloc_userpage(void);
@@ -307,25 +310,7 @@ unsigned int coremap_used_bytes(void){
     return used_pages * PAGE_SIZE;
 }
 
-/* TLB shootdown handling called from interprocessor_interrupt */
-void vm_tlbshootdown(const struct tlbshootdown *ts) {
-    KASSERT(ts != NULL);
-    
-    switch (ts->type) {
-        case TLBSHOOTDOWN_ASID:
-            if (ts->asid != 0) {
-                tlb_invalidate_asid_entries(ts->asid);
-            }
-            break;
-            
-        case TLBSHOOTDOWN_ALL:
-            tlb_shootdown_all();
-            break;
-            
-        default:
-            panic("vm_tlbshootdown: Unknown shootdown type %d\n", ts->type);
-    }
-}
+
 
 
 vaddr_t get_last_level_pt(vaddr_t vaddr, struct addrspace *as){
@@ -497,6 +482,26 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     return 0;
 }
 
+/* TLB shootdown handling called from interprocessor_interrupt */
+void vm_tlbshootdown(const struct tlbshootdown *ts) {
+    KASSERT(ts != NULL);
+    
+    switch (ts->type) {
+        case TLB_SHOOTDOWN_ASID:
+            if (ts->asid != 0) {
+                tlb_invalidate_asid_entries(ts->asid);
+            }
+            break;
+            
+        case TLB_SHOOTDOWN_ALL:
+            tlb_shootdown_all();
+            break;
+            
+        default:
+            panic("vm_tlbshootdown: Unknown shootdown type %d\n", ts->type);
+    }
+}
+
 /*
  * Invalidate all TLB entries for a specific ASID.
  * This function is called when an address space is destroyed.
@@ -506,6 +511,9 @@ void tlb_invalidate_asid_entries(uint32_t asid) {
     for (int i = 0; i < NUM_TLB; i++) {
         uint32_t entryhi, entrylo;
         tlb_read(&entryhi, &entrylo, i);
+        if (!(entrylo & TLBLO_VALID)) {
+            continue; // Skip invalid entries
+        }
         if (((entryhi & TLBHI_PID) >> TLBHI_ASID_SHIFT) == asid) {
             tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
         }
@@ -521,4 +529,39 @@ void tlb_shootdown_all(void) {
         tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
     }
     splx(spl);
+}
+
+void shootdown_all_asid(uint8_t asid) {
+    struct tlbshootdown ts;
+    unsigned int i;
+    ts.asid = asid;
+    ts.type = TLB_SHOOTDOWN_ASID;
+    ts.vaddr = 0; // Not used for ASID shootdown
+    vm_tlbshootdown(&ts);
+    for (i = 0; i < num_cpus; i++)
+    {
+        struct cpu *cpu = cpu_get_by_number(i);
+        if (cpu != NULL) {
+            ipi_tlbshootdown(cpu, &ts);
+        }
+    }
+}
+
+void save_tlb_state_to_page_tables() {
+    for (int i = 0; i < NUM_TLB; i++) {
+        uint32_t entryhi, entrylo;
+        tlb_read(&entryhi, &entrylo, i);
+        
+        if (entrylo & TLBLO_VALID) {
+            paddr_t paddr = entrylo & TLBLO_PPAGE;
+            
+            struct page_table_entry *pte = (struct page_table_entry *)paddr;
+            if (pte != NULL) {
+                // Copy dirty bit from TLB to page table
+                if (entrylo & TLBLO_DIRTY) {
+                    pte->dirty = 1;
+                }
+            }
+        }
+    }
 }
