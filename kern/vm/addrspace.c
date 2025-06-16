@@ -269,8 +269,7 @@ as_destroy(struct addrspace *as)
         spinlock_acquire(&addrspace_lock);
         // Send shootdown to ALL other CPUs
 		shootdown_all_asid(as->asid);
-        
-        bitmap_unmark(asid_bitmap, as->asid);
+		bitmap_unmark(asid_bitmap, as->asid);
         spinlock_release(&addrspace_lock);
     }
 	/* Free the page table */

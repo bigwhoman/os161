@@ -541,7 +541,10 @@ void shootdown_all_asid(uint8_t asid) {
     for (i = 0; i < num_cpus; i++)
     {
         struct cpu *cpu = cpu_get_by_number(i);
-        if (cpu != NULL) {
+        if (cpu == curcpu){
+            vm_tlbshootdown(&ts); // Call directly if it's the current CPU
+        }
+        else if (cpu != NULL) {
             ipi_tlbshootdown(cpu, &ts);
         }
     }
@@ -564,4 +567,66 @@ void save_tlb_state_to_page_tables() {
             }
         }
     }
+}
+
+
+
+void show_all_tlb_entries(void) {
+    int spl;
+    uint32_t entryhi, entrylo;
+    
+    kprintf("=== TLB ENTRIES DUMP ===\n");
+    kprintf("Entry | Valid | ASID | Virtual Addr | Physical Addr | Dirty | Global\n");
+    kprintf("------|-------|------|--------------|---------------|-------|-------\n");
+    
+    // Disable interrupts while reading TLB
+    spl = splhigh();
+    
+    for (int i = 0; i < NUM_TLB; i++) {
+        tlb_read(&entryhi, &entrylo, i);
+        
+        // Extract fields
+        int valid = (entrylo & TLBLO_VALID) ? 1 : 0;
+        int dirty = (entrylo & TLBLO_DIRTY) ? 1 : 0;
+        int global = (entrylo & TLBLO_GLOBAL) ? 1 : 0;
+        uint32_t asid = (entryhi & TLBHI_PID) >> TLBHI_ASID_SHIFT;
+        uint32_t vaddr = entryhi & TLBHI_VPAGE;
+        uint32_t paddr = entrylo & TLBLO_PPAGE;
+        
+        kprintf(" %2d   |   %d   |  %2d  | 0x%08x   | 0x%08x    |   %d   |   %d  \n",
+                i, valid, asid, vaddr, paddr, dirty, global);
+    }
+    
+    splx(spl);
+    kprintf("========================\n");
+}
+
+// Shorter version that only shows valid entries
+void show_valid_tlb_entries(void) {
+    int spl;
+    uint32_t entryhi, entrylo;
+    int valid_count = 0;
+    
+    kprintf("=== VALID TLB ENTRIES ===\n");
+    
+    spl = splhigh();
+    
+    for (int i = 0; i < NUM_TLB; i++) {
+        tlb_read(&entryhi, &entrylo, i);
+        
+        if (entrylo & TLBLO_VALID) {
+            valid_count++;
+            uint32_t asid = (entryhi & TLBHI_PID) >> TLBHI_ASID_SHIFT;
+            uint32_t vaddr = entryhi & TLBHI_VPAGE;
+            uint32_t paddr = entrylo & TLBLO_PPAGE;
+            int dirty = (entrylo & TLBLO_DIRTY) ? 1 : 0;
+            
+            kprintf("TLB[%2d]: ASID=%2d  0x%08x -> 0x%08x  %s\n", 
+                    i, asid, vaddr, paddr, dirty ? "DIRTY" : "CLEAN");
+        }
+    }
+    
+    splx(spl);
+    kprintf("Total valid entries: %d/%d\n", valid_count, NUM_TLB);
+    kprintf("========================\n");
 }

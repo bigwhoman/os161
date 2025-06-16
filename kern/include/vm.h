@@ -85,4 +85,8 @@ void vm_tlbshootdown(const struct tlbshootdown *);
 
 void shootdown_all_asid(uint8_t asid);
 
+void show_valid_tlb_entries(void);
+
+void show_all_tlb_entries(void);
+
 #endif /* _VM_H_ */

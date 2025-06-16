@@ -9,7 +9,7 @@
 
 
 static int copy_file_descriptors(struct proc *src, struct proc *dst); 
-
+void print_memory_contents(vaddr_t start_addr, int count);
 /* execv replaces the currently executing program with
  * a newly loaded program image.
  * This occurs within one process; the process id is unchanged.
@@ -57,7 +57,7 @@ int sys_execv(const char *program, char *argv[], int *retval){
         if (err)
         {
             kfree(argin);
-            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            for (int j = argc - 1; j >= 0; j--)
             {
                 kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
                 array_remove(kernel_argv, j);     // Remove the string from the array
@@ -70,7 +70,7 @@ int sys_execv(const char *program, char *argv[], int *retval){
         {
             err = ENOENT;
             kfree(argin);
-            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            for (int j = argc - 1; j >= 0; j--)
             {
                 kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
                 array_remove(kernel_argv, j);     // Remove the string from the array
@@ -83,7 +83,7 @@ int sys_execv(const char *program, char *argv[], int *retval){
         if (err)
         {
             kfree(argin);
-            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            for (int j = argc - 1; j >= 0; j--)
             {
                 kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
                 array_remove(kernel_argv, j);     // Remove the string from the array
@@ -95,7 +95,7 @@ int sys_execv(const char *program, char *argv[], int *retval){
         if (argin == NULL || got <= 0)
         {
             kfree(argin);
-            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            for (int j = argc - 1; j >= 0; j--)
             {
                 kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
                 array_remove(kernel_argv, j);     // Remove the string from the array
@@ -109,7 +109,7 @@ int sys_execv(const char *program, char *argv[], int *retval){
         if (left < 0){
             *retval = -1;
             kfree(argin);
-            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            for (int j = argc - 1; j >= 0; j--)
             {
                 kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
                 array_remove(kernel_argv, j); // Remove the string from the array
@@ -124,7 +124,7 @@ int sys_execv(const char *program, char *argv[], int *retval){
         array_add(kernel_argv, kstrdup(argin),NULL);
         all += got + 1;
 	}
-	
+    
 
 	err = copyinstr((const_userptr_t)program, prog, PATH_MAX,(size_t *)retval);
 
@@ -140,6 +140,16 @@ int sys_execv(const char *program, char *argv[], int *retval){
         *retval = -1;
         return err;
     }
+    
+
+
+    // show_valid_tlb_entries();
+    // kprintf("before destroy--------------\n");
+    as_destroy(old_as);
+    // kprintf("after destroy---------------\n");
+    // show_valid_tlb_entries();
+
+
 
     err = open_copy_prog(prog, &as, &entrypoint);
 	if (err){
@@ -149,8 +159,8 @@ int sys_execv(const char *program, char *argv[], int *retval){
 		return err;
 	}
 
-	/* Define the user stack in the address space */
-	err = as_define_stack(as, &stackptr);
+    /* Define the user stack in the address space */
+    err = as_define_stack(as, &stackptr);
 	if (err) {
 		/* p_addrspace will go away when curproc is destroyed */
 		proc_setas(old_as);
@@ -159,10 +169,8 @@ int sys_execv(const char *program, char *argv[], int *retval){
 		return err;
 	}
 
-
-    as_destroy(old_as); 
     /* Put arguments onto the stack */
-	vaddr_t strloc = (vaddr_t)(stackptr - all);
+    vaddr_t strloc = (vaddr_t)(stackptr - all);
 
 	/* actuall strings starting location */
 	strloc &= 0xfffffffc;
@@ -174,7 +182,7 @@ int sys_execv(const char *program, char *argv[], int *retval){
     if (err) {
         kprintf("copyout failed: %s\n", strerror(err));
         kfree(argin);
-        for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+        for (int j = argc - 1; j >= 0; j--)
         {
             kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
             array_remove(kernel_argv, j);     // Remove the string from the array
@@ -184,15 +192,27 @@ int sys_execv(const char *program, char *argv[], int *retval){
         return err;
     }
     
+
     for (i = 0; i < (size_t)argc; i++)
 	{
+        
+
 		/* Move arguments from old stack to new one */
-        err = copyout((void *)strloc, (userptr_t)((vaddr_t *)argptr + i), sizeof(vaddr_t));
+        err = copyout(&strloc, (userptr_t)((vaddr_t *)argptr + i), sizeof(vaddr_t));
+
+        /* For debug purposes ----------------------*/
+        // int *dumloc = kmalloc(sizeof(vaddr_t)); // Allocate memory first!
+        // copyin((userptr_t)((vaddr_t *)argptr + i), dumloc, sizeof(vaddr_t));
+        // kprintf("argv[%zu] pointer = 0x%08x\n", i, *dumloc);
+        /*----------------------------------------- */
+
+
+
         if (err)
         {
             kprintf("copyout failed: %s\n", strerror(err));
             kfree(argin);
-            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            for (int j = argc - 1; j >= 0; j--)
             {
                 kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
                 array_remove(kernel_argv, j);     // Remove the string from the array
@@ -204,11 +224,20 @@ int sys_execv(const char *program, char *argv[], int *retval){
         // strcpy((char *)strloc, kernel_argv[i]);
         char *kernel_arg = array_get(kernel_argv, i);
         err = copyoutstr(kernel_arg, (userptr_t)strloc, strlen(kernel_arg) + 1, NULL);
+        
+        /* -------------------------------- */
+        // char *debug_str = kmalloc(strlen(kernel_arg) + 1);
+        // copyinstr((userptr_t)strloc, debug_str, strlen(kernel_arg) + 1, NULL);
+        // kprintf("argv[%zu] = \"%s\" at 0x%08x\n", i, debug_str, (unsigned int)strloc);
+        /* -------------------------------- */
+
+
+
         if (err)
         {
             kprintf("copyout failed: %s\n", strerror(err));
             kfree(argin);
-            for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+            for (int j = argc - 1; j >= 0; j--)
             {
                 kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
                 array_remove(kernel_argv, j);     // Remove the string from the array
@@ -220,12 +249,15 @@ int sys_execv(const char *program, char *argv[], int *retval){
         strloc += strlen(kernel_arg) + 1;
         kfree(kernel_arg); // Free the kernel argument string
 	}
-    for (int j = array_num(kernel_argv) - 1; j >= 0; j--)
+    int arr_num = array_num(kernel_argv);
+    for (int j = arr_num - 1; j >= 0; j--)
     {
-        kfree(array_get(kernel_argv, j)); // Free the kernel argument strings
         array_remove(kernel_argv, j);     // Remove the string from the array
     }
     array_destroy(kernel_argv); // Free the array structure
+
+
+    // print_memory_contents(0x4000b0, 10); // Debugging: print stack contents
 
     /* Warp to user mode. */
 	enter_new_process(argc /*argc*/, (void *)argptr /*userspace addr of argv*/,
@@ -237,6 +269,28 @@ int sys_execv(const char *program, char *argv[], int *retval){
     return err;
 } 
 
+
+
+void print_memory_contents(vaddr_t start_addr, int count) {
+    kprintf("=== Virtual Memory Contents (starting at 0x%08x) ===\n", (unsigned int)start_addr);
+    
+    for (int i = 0; i < count; i++) {
+        vaddr_t current_addr = start_addr + (i * sizeof(int));
+        int value;
+        int err = copyin((userptr_t)current_addr, &value, sizeof(int));
+        
+        if (err) {
+            kprintf("[%02d] 0x%08x: <read error>\n", i, (unsigned int)current_addr);
+        } else {
+            // Print as both hex and try as string pointer
+            kprintf("[%02d] 0x%08x: 0x%08x", i, (unsigned int)current_addr, value);
+            
+            // Try to interpret as string pointer
+            kprintf("\n");
+        }
+    }
+    kprintf("=== End Memory Content ===\n");
+}
 
 /* fork duplicates the currently running process. 
  * The two copies are identical, except that one (
