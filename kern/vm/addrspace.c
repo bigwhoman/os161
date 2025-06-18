@@ -68,7 +68,6 @@ uint8_t get_asid(void);
 uint8_t get_asid(){
 	unsigned int asid;
 	int result;
-	int spl;
 	size_t i;
 	result = 0;
 	spinlock_acquire(&addrspace_lock);
@@ -79,17 +78,16 @@ uint8_t get_asid(){
 	result = bitmap_alloc(asid_bitmap, &asid);
 	if (result) {
 		/* No free ASID available */
-		spl = splhigh(); /* Disable interrupts */
 
-		/* Invalidate all TLB entries */
-		tlb_shootdown_all();	
+
+		/* Invalidate all TLB entries for all cores */
+		all_tlb_shootdown(); 
 		for ( i = 1; i < MAX_ASID; i++)
 		{
 			bitmap_unmark(asid_bitmap, i); /* Free all ASIDs */
 		}
 		bitmap_alloc(asid_bitmap, &asid); /* Allocate a new ASID */
 
-		splx(spl);
 	}
 	spinlock_release(&addrspace_lock);
 	return asid; 
@@ -210,8 +208,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	newas->stack_bottom = old->stack_bottom; /* Copy stack bottom */
 	newas->heap_base = old->heap_base; /* Copy heap base */
 	newas->heap_end = old->heap_end; /* Copy heap end */
-	newas->pt = old->pt; /* Copy page table address */
-	newas->asid = old->asid; /* TODO: Not sure -- Copy ASID */
+	newas->asid = 0; /* TODO: Not sure -- Copy ASID */
 	newas->addrlock = lock_create("new_addrspace_lock");
 	if (newas->addrlock == NULL) {
 		kfree(newas);
@@ -225,9 +222,48 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	lock_release(old->addrlock);
 
 	/*
-	 * Shallow copy the linked list of memory regions.
+	 * Deep copy the linked list of memory regions.
 	 */
-	newas->regions = old->regions;
+	struct vm_region *old_region = old->regions;
+	struct vm_region *prev_region = NULL;
+	while (old_region != NULL) {
+		struct vm_region *new_region = kmalloc(sizeof(struct vm_region));
+		if (new_region == NULL) {
+			as_destroy(newas); /* Clean up if allocation fails */
+			return ENOMEM; /* Out of memory */
+		}
+		/* Copy the properties of the old region to the new region */
+		new_region->start = old_region->start;
+		new_region->size = old_region->size;
+		new_region->readable = old_region->readable;
+		new_region->writeable = old_region->writeable;
+		new_region->executable = old_region->executable;
+		new_region->temp_write = old_region->temp_write;
+		new_region->next = NULL; /* Insert at the beginning of the list */
+		if (newas->regions == NULL)
+			newas->regions = new_region; /* Set the new region as the first region */	
+		else
+			prev_region->next = new_region; /* Link the new region to the previous one */
+
+
+		prev_region = new_region; /* Update the previous region to the new one */
+
+		
+		old_region = old_region->next; /* Move to the next region in the old address space */
+	}	
+
+	memcpy(newas->stack_region, old->stack_region, sizeof(struct vm_region)); /* Copy stack region */
+	memcpy(newas->heap_region, old->heap_region, sizeof(struct vm_region)); /* Copy heap region */
+
+
+	/* Copy Page Tables */
+	kfree(newas->pt); /* Free the old page table structure */
+	newas->pt = (struct page_table *)copy_page_table(old->pt, 1); /* Copy the page table */
+
+
+
+	shootdown_all_asid(old->asid);
+
 
 	*ret = newas;
 	return 0;

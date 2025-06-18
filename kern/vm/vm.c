@@ -271,29 +271,33 @@ void free_kpages(vaddr_t addr){
         }
 
         /* TODO: Make this reference counting based !!! */
-        coremap[page].allocated = 0;
-        coremap[page].kernel = 0;
-        if (curthread != NULL && curproc != NULL)
-            coremap[page].owner = 0;
         coremap[page].reference_count -= 1;
-        
-    
+
         /* TODO: Need to fix this timestamp*/
         coremap[page].last_access = 1000;
 
-        /* Make sure to fix all of the previous frees */
-        while (true)
+        if (coremap[page].reference_count == 0)
         {
-            p_num = p_num - 1 < (int)first_page ? (int)total_pages - 1 : p_num - 1;
-            coremap[p_num].next_free = page;
-            if (!coremap[p_num].allocated)
-                break;
+            coremap[page].allocated = 0;
+            coremap[page].kernel = 0;
+            if (curthread != NULL && curproc != NULL)
+                coremap[page].owner = 0;
+        
+            /* Make sure to fix all of the previous frees */
+            while (true)
+            {
+                p_num = p_num - 1 < (int)first_page ? (int)total_pages - 1 : p_num - 1;
+                coremap[p_num].next_free = page;
+                if (!coremap[p_num].allocated)
+                    break;
+            }
+
+            coremap[page].start = 0;
+            coremap[page].allocation_size = 0;
+            coremap[page].next_allocated = 0;
         }
 
         next_page = coremap[page].next_allocated;
-        coremap[page].start = 0;
-        coremap[page].allocation_size = 0;
-        coremap[page].next_allocated = 0; 
         page = next_page;
     }
     spinlock_release(&coremap_lock);
@@ -398,6 +402,78 @@ void free_page_table(void *page_table, size_t level){
     }
 }
 
+void *copy_page_table(void *page_table, size_t level) {
+    struct page_table *src_pt = (struct page_table *)page_table;
+    
+    if (src_pt == NULL) {
+        return NULL; // Nothing to copy
+    }
+    
+    // Allocate new page table for this level
+    struct page_table *new_pt = kmalloc(sizeof(struct page_table));
+    if (new_pt == NULL) {
+        return NULL; // Out of memory
+    }
+    
+    // Initialize the new page table
+    memset(new_pt, 0, sizeof(struct page_table));
+    
+    for (size_t i = 0; i < PAGE_TABLE_SIZE; i++) {
+        if (src_pt->entries[i].valid) {
+            if (level < PT_LEVELS) {
+                // Recursively copy the next level
+                struct page_table *src_next_pt = (struct page_table *)PADDR_TO_KVADDR(PAGE_TO_PADDR(src_pt->entries[i].frame));
+                struct page_table *new_next_pt = copy_page_table(src_next_pt, level + 1);
+                
+                if (new_next_pt == NULL) {
+                    // Cleanup on failure - free what we've allocated so far
+                    free_page_table(new_pt, level);
+                    return NULL;
+                }
+                
+                // Set up the page table entry to point to the copied next level
+                new_pt->entries[i] = src_pt->entries[i]; // Copy all fields
+                new_pt->entries[i].frame = PADDR_TO_PAGE(KVADDR_TO_PADDR(new_next_pt));
+                
+            } else {
+                // Level 3 (leaf level) - implement COW
+                // Copy the page table entry
+                new_pt->entries[i] = src_pt->entries[i];
+                
+                // If the page was writable, make it COW
+                if (src_pt->entries[i].writable) {
+                    // Mark both parent and child as COW and read-only
+                    src_pt->entries[i].cow = 1;
+                    src_pt->entries[i].writable = 0;
+                    
+                    new_pt->entries[i].cow = 1;
+                    new_pt->entries[i].writable = 0;
+                    
+                    // Increment reference count for the physical frame
+                    unsigned int frame_num = src_pt->entries[i].frame;
+                    lock_acquire(&coremap_lock);
+                    coremap[frame_num].reference_count++;
+                    lock_release(&coremap_lock);
+                    
+                    // TODO: Invalidate TLB entries for this page in parent process
+                    
+                }
+                // If page was read-only, just share it normally (no COW needed)
+                // The frame is already being shared, increment ref count
+                if (!src_pt->entries[i].cow) {
+                    unsigned int frame_num = src_pt->entries[i].frame;
+                    lock_acquire(&coremap_lock);
+                    coremap[frame_num].reference_count++;
+                    lock_release(&coremap_lock);
+                }
+            }
+        }
+    }
+    
+    return new_pt;
+}
+
+
 /* Fault handling function called by trap code */
 int vm_fault(int faulttype, vaddr_t faultaddress){
     if (faultaddress >= USERSPACETOP) {
@@ -411,10 +487,6 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     if (curproc == NULL || curproc->p_addrspace == NULL) {
         DEBUG(DB_VM,"vm_fault: no current process or address space\n");
         return EFAULT; // No current process or address space
-    }
-    if (faulttype == VM_FAULT_READONLY) {
-        DEBUG(DB_VM,"vm_fault: read-only fault type is not supported\n");
-        return EFAULT; // Read-only fault type is not supported
     }
 
     /* Check Vm_regions to see if virtaddr is valid and has permissions*/
@@ -450,6 +522,38 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     third_level_index = THIRD_LEVEL_MASK(faultaddress);
     third_level_pt = get_last_level_pt(faultaddress, curproc->p_addrspace);
     struct page_table *pt = (struct page_table *)third_level_pt;
+
+    if (pt->entries[third_level_index].valid && faulttype == VM_FAULT_WRITE 
+            && pt->entries[third_level_index].cow) {
+        // Handle copy-on-write (COW) case
+        unsigned int frame_num = pt->entries[third_level_index].frame;
+        // Allocate a new page for the COW
+        unsigned int new_page_frame = coremap_alloc_userpage(); // Allocate one page
+        if (new_page_frame == 0) {
+            return ENOMEM; // Out of memory
+        }
+        KASSERT(new_page_frame < total_pages); // Ensure the page frame is within bounds
+        // Copy the contents of the old page to the new page
+        memcpy(PADDR_TO_KVADDR(PAGE_TO_PADDR(new_page_frame)),
+               PADDR_TO_KVADDR(PAGE_TO_PADDR(frame_num)), PAGE_SIZE);
+        // Update the page table entry to point to the new page
+        pt->entries[third_level_index].frame = new_page_frame;
+        pt->entries[third_level_index].valid = 1;
+        pt->entries[third_level_index].dirty = 1; // Mark as dirty since we wrote to it
+        pt->entries[third_level_index].readable = region->readable;
+        pt->entries[third_level_index].writable = region->writeable || region->temp_write;
+        pt->entries[third_level_index].executable = region->executable;
+        pt->entries[third_level_index].cow = 0; // Clear COW since we copied it
+        // Decrement the reference count of the old page
+        kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(frame_num)));
+
+        // Invalidate old TLB entry by probing and overwriting
+        uint32_t old_tlbhi = faultaddress & TLBHI_VPAGE;
+        old_tlbhi |= (curproc->p_addrspace->asid << TLBHI_ASID_SHIFT) & TLBHI_PID;
+
+        tlb_write(TLBHI_INVALID(tlb_index), TLBLO_INVALID(), tlb_index);
+    }
+
     if (pt->entries[third_level_index].valid == 0) {
         // Page fault: allocate a new page
         unsigned int new_page_frame = coremap_alloc_userpage(); // Allocate one page
@@ -468,13 +572,13 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     pt->entries[third_level_index].accessed = 1;
     int frame = pt->entries[third_level_index].frame;
     int valid = pt->entries[third_level_index].valid;
-    int dirty = pt->entries[third_level_index].dirty;
+    int writable = pt->entries[third_level_index].writable;
     // Updating the TLB entry
     // We need to set the TLBHI and TLBLO entries 
     uint32_t tlbhi = faultaddress & TLBHI_VPAGE;
     tlbhi |= (curproc->p_addrspace->asid << TLBHI_ASID_SHIFT) & TLBHI_PID;
     uint32_t tlblo = (PAGE_TO_PADDR(frame)& TLBLO_PPAGE) |
-                     (dirty ? TLBLO_DIRTY : 0) |
+                     (writable ? TLBLO_DIRTY : 0) |
                      (valid ? TLBLO_VALID : 0);
     DEBUG(DB_VM, "vm_fault ---> addr : 0x%x, third_level_index : %x, frame : %x, paddr : %x, loo : %x, tlbhi : 0x%x, tlblo : 0x%x\n",
           faultaddress, third_level_index, pt->entries[third_level_index].frame, PAGE_TO_PADDR(pt->entries[third_level_index].frame), (PAGE_TO_PADDR(pt->entries[third_level_index].frame)& TLBLO_PPAGE), tlbhi, tlblo);
@@ -519,6 +623,21 @@ void tlb_invalidate_asid_entries(uint32_t asid) {
         }
     }
     splx(spl);
+}
+
+void all_tlb_shootdown(void) {
+    struct tlbshootdown ts;
+    ts.asid = 0; // ASID 0 means all ASIDs
+    ts.type = TLB_SHOOTDOWN_ALL;
+    ts.vaddr = 0; // Not used for full shootdown
+    vm_tlbshootdown(&ts);
+    
+    for (unsigned int i = 0; i < num_cpus; i++) {
+        struct cpu *cpu = cpu_get_by_number(i);
+        if (cpu != NULL && cpu != curcpu) {
+            ipi_tlbshootdown(cpu, &ts);
+        }
+    }
 }
 
 /* Do a full tlb shootdown */

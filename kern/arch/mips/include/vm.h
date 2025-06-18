@@ -144,6 +144,7 @@ struct page_table_entry {
         unsigned int readable : 1; /* read-only bit */
         unsigned int writable : 1; /* read-only bit */
         unsigned int executable : 1; /* read-only bit */
+		unsigned int cow : 1; /* copy-on-write bit */
 };
 
 #define PAGE_TABLE_SIZE (PAGE_SIZE / sizeof(struct page_table_entry)) /* Size of the page table */

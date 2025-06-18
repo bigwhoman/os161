@@ -67,6 +67,10 @@ void free_kpages(vaddr_t addr);
 /* Free page table and mark coremap pages as free */
 void free_page_table(void *pt, size_t level);
 
+/* COW a page table recursivly */
+void *copy_page_table(void *page_table, size_t level);
+
+
 /* Shootdown all tlb entries */
 void tlb_shootdown_all(void);
 
@@ -88,5 +92,8 @@ void shootdown_all_asid(uint8_t asid);
 void show_valid_tlb_entries(void);
 
 void show_all_tlb_entries(void);
+
+void all_tlb_shootdown(void);
+
 
 #endif /* _VM_H_ */
