@@ -9,6 +9,7 @@
 #include <addrspace.h>
 #include <kern/errno.h>
 #include <cpu.h>
+#include <copyinout.h>
 
 
 void save_tlb_state_to_page_tables(void);
@@ -153,12 +154,7 @@ vaddr_t alloc_kpages(unsigned npages){
             KASSERT(starting_page == first_free_page);
             break;
         }
-        // if (max_found == npages){
-        //     ending_page = page;
-        //     starting_page = first_free_page;
-        //     break;
-        // }
-    }
+   }
 
     /* Make sure we have enough pages left to allocate 
      * TODO: Change this for consistancy
@@ -174,49 +170,6 @@ vaddr_t alloc_kpages(unsigned npages){
     /* Set start and end of our allocation */
     coremap[starting_page].start = 1;
     coremap[ending_page].end = 1;
-
-    /* start the allocation
-     * This is fairly complicated for "all consecutive" allocations
-     * Keeping it around to use for non-kernel memory allocations
-     */
-
-    // page = starting_page;
-    // for (i = 0; i < npages; i++)
-    // {
-    //     p_num = page;
-    //     coremap[page].allocated = 1;
-    //     coremap[page].kernel = 1;
-    //     if (curthread != NULL && curproc != NULL)
-    //         coremap[page].owner = (unsigned int)(curproc->pid);
-    //     coremap[page].reference_count += 1;
-    //     coremap[page].allocation_size = npages;
-
-    //     /* TODO: Need to fix this timestamp*/
-    //     coremap[page].last_access = 1000;
-
-    //      /*
-    //       * Fix previous pages that have this page as their next free page 
-    //       */
-    //      while(true){
-    //          p_num = p_num - 1 < (int)first_page ? (int)total_pages - 1 : p_num - 1;
-    //          coremap[p_num].next_free = coremap[ending_page].next_free;
-    //          if (!coremap[p_num].allocated || coremap[p_num].next_allocated == page)
-    //              break;
-    //      }
-
-    //     /* 
-    //      * Make sure we are not in the end of allocation 
-    //      * set the next allocated as the next free 
-    //      */
-    //     if (!coremap[page].end){
-    //         coremap[page].next_allocated = coremap[page].next_free;
-    //         coremap[page].next_free = coremap[ending_page].next_free;
-    //         page = coremap[page].next_allocated;
-    //     } else {
-    //         coremap[page].next_allocated = starting_page;
-    //     }
-
-    // } 
 
     /* Naive approach which only works on consecutive allocations */
     for (page = starting_page; page <= ending_page; page++)
@@ -433,7 +386,7 @@ void *copy_page_table(void *page_table, size_t level) {
                 
                 // Set up the page table entry to point to the copied next level
                 new_pt->entries[i] = src_pt->entries[i]; // Copy all fields
-                new_pt->entries[i].frame = PADDR_TO_PAGE(KVADDR_TO_PADDR(new_next_pt));
+                new_pt->entries[i].frame = PADDR_TO_PAGE(KVADDR_TO_PADDR((vaddr_t)new_next_pt));
                 
             } else {
                 // Level 3 (leaf level) - implement COW
@@ -451,9 +404,9 @@ void *copy_page_table(void *page_table, size_t level) {
                     
                     // Increment reference count for the physical frame
                     unsigned int frame_num = src_pt->entries[i].frame;
-                    lock_acquire(&coremap_lock);
+                    spinlock_acquire(&coremap_lock);
                     coremap[frame_num].reference_count++;
-                    lock_release(&coremap_lock);
+                    spinlock_release(&coremap_lock);
                     
                     // TODO: Invalidate TLB entries for this page in parent process
                     
@@ -462,9 +415,9 @@ void *copy_page_table(void *page_table, size_t level) {
                 // The frame is already being shared, increment ref count
                 if (!src_pt->entries[i].cow) {
                     unsigned int frame_num = src_pt->entries[i].frame;
-                    lock_acquire(&coremap_lock);
+                    spinlock_acquire(&coremap_lock);
                     coremap[frame_num].reference_count++;
-                    lock_release(&coremap_lock);
+                    spinlock_release(&coremap_lock);
                 }
             }
         }
@@ -516,6 +469,11 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         return EFAULT; // No valid region found for the fault address
     }
 
+    if (faulttype == VM_FAULT_READONLY) {
+        // If the fault is read-only, we can handle it as a read fault
+        kprintf("vm_fault: handling read-only fault at address 0x%x\n", faultaddress);
+    }
+
 
 
     vaddr_t third_level_index, third_level_pt;
@@ -533,9 +491,37 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
             return ENOMEM; // Out of memory
         }
         KASSERT(new_page_frame < total_pages); // Ensure the page frame is within bounds
-        // Copy the contents of the old page to the new page
-        memcpy(PADDR_TO_KVADDR(PAGE_TO_PADDR(new_page_frame)),
-               PADDR_TO_KVADDR(PAGE_TO_PADDR(frame_num)), PAGE_SIZE);
+
+        void *kernel_buffer = kmalloc(PAGE_SIZE);
+        if (kernel_buffer == NULL)
+        {
+            // Clean up the allocated page
+            kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(new_page_frame)));
+            return ENOMEM;
+        }
+
+        // Copy from old page to kernel buffer
+        int result = copyin((const_userptr_t)(faultaddress & PAGE_FRAME),
+                            kernel_buffer, PAGE_SIZE);
+        if (result)
+        {
+            panic("vm_fault: copyin failed with error %d\n", result);
+            kfree(kernel_buffer);
+            kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(new_page_frame)));
+            return result;
+        }
+
+        // Copy from kernel buffer to new page
+        result = copyout(kernel_buffer,
+                         (userptr_t)(faultaddress & PAGE_FRAME), PAGE_SIZE);
+
+        kfree(kernel_buffer);
+
+        if (result)
+        {
+            panic("vm_fault: copyout failed with error %d\n", result); 
+            return result;
+        }
         // Update the page table entry to point to the new page
         pt->entries[third_level_index].frame = new_page_frame;
         pt->entries[third_level_index].valid = 1;
@@ -547,11 +533,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         // Decrement the reference count of the old page
         kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(frame_num)));
 
-        // Invalidate old TLB entry by probing and overwriting
-        uint32_t old_tlbhi = faultaddress & TLBHI_VPAGE;
-        old_tlbhi |= (curproc->p_addrspace->asid << TLBHI_ASID_SHIFT) & TLBHI_PID;
-
-        tlb_write(TLBHI_INVALID(tlb_index), TLBLO_INVALID(), tlb_index);
+        tlb_shootdown_individual(faultaddress, curproc->p_addrspace->asid);  
     }
 
     if (pt->entries[third_level_index].valid == 0) {
@@ -580,8 +562,8 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     uint32_t tlblo = (PAGE_TO_PADDR(frame)& TLBLO_PPAGE) |
                      (writable ? TLBLO_DIRTY : 0) |
                      (valid ? TLBLO_VALID : 0);
-    DEBUG(DB_VM, "vm_fault ---> addr : 0x%x, third_level_index : %x, frame : %x, paddr : %x, loo : %x, tlbhi : 0x%x, tlblo : 0x%x\n",
-          faultaddress, third_level_index, pt->entries[third_level_index].frame, PAGE_TO_PADDR(pt->entries[third_level_index].frame), (PAGE_TO_PADDR(pt->entries[third_level_index].frame)& TLBLO_PPAGE), tlbhi, tlblo);
+    // DEBUG(DB_VM /*disable for now */, "vm_fault ---> addr : 0x%x, third_level_index : %x, frame : %x, paddr : %x, loo : %x, tlbhi : 0x%x, tlblo : 0x%x\n",
+    //       faultaddress, third_level_index, pt->entries[third_level_index].frame, PAGE_TO_PADDR(pt->entries[third_level_index].frame), (PAGE_TO_PADDR(pt->entries[third_level_index].frame)& TLBLO_PPAGE), tlbhi, tlblo);
     tlb_random(tlbhi, tlblo);
     return 0;
 }
@@ -600,10 +582,41 @@ void vm_tlbshootdown(const struct tlbshootdown *ts) {
         case TLB_SHOOTDOWN_ALL:
             tlb_shootdown_all();
             break;
+
+        case TLB_SHOOTDOWN_INDIVIDUAL:
+            if (ts->vaddr != 0) {
+                tlb_invalidate_vaddr(ts);
+            } else {
+                panic("vm_tlbshootdown: TLB_SHOOTDOWN_INDIVIDUAL requires a valid vaddr\n");
+            }
+            break;
             
         default:
             panic("vm_tlbshootdown: Unknown shootdown type %d\n", ts->type);
     }
+}
+
+/* Invalidate a vaddr in the TLB */
+void tlb_invalidate_vaddr(const struct tlbshootdown *ts) {
+    KASSERT(ts != NULL);
+    int spl = splhigh();
+    uint32_t entryhi, entrylo;
+    
+    // Read all TLB entries and invalidate the one matching the vaddr
+    for (int i = 0; i < NUM_TLB; i++) {
+        tlb_read(&entryhi, &entrylo, i);
+        if (!(entrylo & TLBLO_VALID ||
+              ((entryhi & TLBHI_PID) >> TLBHI_ASID_SHIFT) != ts->asid))
+        {
+            continue; // Skip invalid entries
+        }
+        if ((entryhi & TLBHI_VPAGE) == (ts->vaddr & TLBHI_VPAGE))
+        {
+            tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+        }
+    }
+    
+    splx(spl);
 }
 
 /*
@@ -625,16 +638,42 @@ void tlb_invalidate_asid_entries(uint32_t asid) {
     splx(spl);
 }
 
+void tlb_shootdown_individual(vaddr_t vaddr, uint8_t asid) {
+    struct tlbshootdown ts; 
+    unsigned int i;
+    ts.asid = asid; // ASID to invalidate 
+    ts.type = TLB_SHOOTDOWN_INDIVIDUAL;
+    ts.vaddr = vaddr; // Virtual address to invalidate
+    vm_tlbshootdown(&ts);
+    
+    // Send IPI to other CPUs
+    for (i = 0; i < num_cpus; i++)
+    {
+        struct cpu *cpu = cpu_get_by_number(i);
+        if (cpu == curcpu){
+            vm_tlbshootdown(&ts); // Call directly if it's the current CPU
+        }
+        else if (cpu != NULL) {
+            ipi_tlbshootdown(cpu, &ts);
+        }
+    }
+}
+
 void all_tlb_shootdown(void) {
     struct tlbshootdown ts;
+    unsigned int i;
     ts.asid = 0; // ASID 0 means all ASIDs
     ts.type = TLB_SHOOTDOWN_ALL;
     ts.vaddr = 0; // Not used for full shootdown
     vm_tlbshootdown(&ts);
     
-    for (unsigned int i = 0; i < num_cpus; i++) {
+    for (i = 0; i < num_cpus; i++)
+    {
         struct cpu *cpu = cpu_get_by_number(i);
-        if (cpu != NULL && cpu != curcpu) {
+        if (cpu == curcpu){
+            vm_tlbshootdown(&ts); // Call directly if it's the current CPU
+        }
+        else if (cpu != NULL) {
             ipi_tlbshootdown(cpu, &ts);
         }
     }

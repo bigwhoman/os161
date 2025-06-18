@@ -70,6 +70,11 @@ void free_page_table(void *pt, size_t level);
 /* COW a page table recursivly */
 void *copy_page_table(void *page_table, size_t level);
 
+/* Shootdown vaddr in all TLBs */
+void tlb_shootdown_individual(vaddr_t vaddr, uint8_t asid);
+
+/* Invalidation of vaddr */
+void tlb_invalidate_vaddr(const struct tlbshootdown *ts);
 
 /* Shootdown all tlb entries */
 void tlb_shootdown_all(void);

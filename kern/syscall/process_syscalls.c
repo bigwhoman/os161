@@ -555,9 +555,17 @@ static int copy_file_descriptors(struct proc *src, struct proc *dst) {
         if (src_fde != NULL) {
             src_fde->count++;
             array_set(dst->fd_table->entries, i, src_fde);
-            
-            /* Mark the bitmap */
-            bitmap_mark(dst->fd_table->bitmap, i);
+
+            if (!bitmap_isset(dst->fd_table->bitmap, i))
+                /* Mark the bitmap */
+                bitmap_mark(dst->fd_table->bitmap, i);
+        }
+        else {
+            /* If the source file descriptor is NULL, we can set the destination to NULL */
+            array_set(dst->fd_table->entries, i, NULL);
+            if (bitmap_isset(dst->fd_table->bitmap, i))
+                /* Unmark the bitmap */
+                bitmap_unmark(dst->fd_table->bitmap, i);
         }
     }
     
