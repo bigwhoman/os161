@@ -117,7 +117,7 @@ vaddr_t alloc_kpages(unsigned npages){
     (void) i;
     (void) p_num;
 
-    DEBUG(DB_VM, "Allocating %d pages for %d\n", npages, curproc->pid);
+    // DEBUG(DB_VM, "Allocating %d pages for %d\n", npages, curproc->pid);
     /*
      * Search the whole coremap for free pages
      * Our priority is to find consecutive pages 
@@ -210,7 +210,7 @@ void free_kpages(vaddr_t addr){
     if (!coremap[page].start){
         panic("Tried freeing non-start page");
     }
-    DEBUG(DB_VM, "Deallocating %d pages for %d \n", coremap[page].allocation_size, coremap[page].owner);
+    // DEBUG(DB_VM, "Deallocating %d pages for %d \n", coremap[page].allocation_size, coremap[page].owner);
 
     used_pages -= coremap[page].allocation_size;
     /* TODO: Check the owner and pid */ 
@@ -227,15 +227,16 @@ void free_kpages(vaddr_t addr){
         coremap[page].reference_count -= 1;
 
         /* TODO: Need to fix this timestamp*/
-        coremap[page].last_access = 1000;
+        coremap[page].last_access = 1000; 
 
+        next_page = coremap[page].next_allocated;
         if (coremap[page].reference_count == 0)
         {
             coremap[page].allocated = 0;
             coremap[page].kernel = 0;
             if (curthread != NULL && curproc != NULL)
                 coremap[page].owner = 0;
-        
+
             /* Make sure to fix all of the previous frees */
             while (true)
             {
@@ -245,12 +246,8 @@ void free_kpages(vaddr_t addr){
                     break;
             }
 
-            coremap[page].start = 0;
-            coremap[page].allocation_size = 0;
-            coremap[page].next_allocated = 0;
+            memset(&coremap[page], 0, sizeof(struct coremap_entry));
         }
-
-        next_page = coremap[page].next_allocated;
         page = next_page;
     }
     spinlock_release(&coremap_lock);
@@ -282,8 +279,8 @@ vaddr_t get_last_level_pt(vaddr_t vaddr, struct addrspace *as){
         new_pt = kmalloc(sizeof(struct page_table));
         memset(new_pt, 0, sizeof(struct page_table)); // Initialize the new page table
         KASSERT(new_pt != NULL);
-        DEBUG(DB_VM, "Creating new page table 2 - index %x - %p - %x\n",
-                                 first_level_index, new_pt, PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt)));
+        // DEBUG(DB_VM, "Creating new page table 2 - index %x - %p - %x\n",
+        //                          first_level_index, new_pt, PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt)));
         pt->entries[first_level_index].frame = PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt));
         pt->entries[first_level_index].dirty = 0;
         pt->entries[first_level_index].accessed = 0;
@@ -294,8 +291,8 @@ vaddr_t get_last_level_pt(vaddr_t vaddr, struct addrspace *as){
     
 
     pt = (struct page_table *)PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[first_level_index].frame));
-    DEBUG(DB_VM, "First level looked up -->> %x got %p\n",
-          first_level_index, pt);
+    // DEBUG(DB_VM, "First level looked up -->> %x got %p\n",
+    //       first_level_index, pt);
     unsigned int second_level_index;
     second_level_index = SECOND_LEVEL_MASK(vaddr);
     if (pt->entries[second_level_index].valid == 0){
@@ -303,8 +300,8 @@ vaddr_t get_last_level_pt(vaddr_t vaddr, struct addrspace *as){
         new_pt = kmalloc(sizeof(struct page_table));
         memset(new_pt, 0, sizeof(struct page_table)); // Initialize the new page table
         KASSERT(new_pt != NULL);
-        DEBUG(DB_VM, "Creating new page table 3 - index %x - %p - %x\n",
-                                 second_level_index, new_pt, PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt)));
+        // DEBUG(DB_VM, "Creating new page table 3 - index %x - %p - %x\n",
+        //                          second_level_index, new_pt, PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt)));
         pt->entries[second_level_index].frame = PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt)); 
         pt->entries[second_level_index].dirty = 0;
         pt->entries[second_level_index].accessed = 0;
@@ -313,8 +310,8 @@ vaddr_t get_last_level_pt(vaddr_t vaddr, struct addrspace *as){
         pt->entries[second_level_index].executable = 0; // MIPS does not have hardware execute bits
     }
     pt = (struct page_table *)PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[SECOND_LEVEL_MASK(vaddr)].frame));
-    DEBUG(DB_VM, "Second level looked up -->> %x got %p\n",
-          second_level_index,  pt);
+    // DEBUG(DB_VM, "Second level looked up -->> %x got %p\n",
+    //       second_level_index,  pt);
     return (int)pt;
 }
 
@@ -327,10 +324,16 @@ unsigned int coremap_alloc_userpage(){
     addr = alloc_kpages(1); // Allocate one page for user space
     if (addr == 0)
     {
+        /* Will remove this later but for now will let it stay!! */
+        panic("coremap_alloc_userpage: Failed to allocate user page\n");
         return 0; // Allocation failed
     }
     page = PADDR_TO_PAGE(KVADDR_TO_PADDR(addr));
+    spinlock_acquire(&coremap_lock);
     coremap[page].kernel = 0;
+    spinlock_release(&coremap_lock);
+    KASSERT(coremap[page].allocated == 1);
+    KASSERT(coremap[page].start == 1);
     
     return page;
 }
@@ -429,6 +432,12 @@ void *copy_page_table(void *page_table, size_t level) {
 
 /* Fault handling function called by trap code */
 int vm_fault(int faulttype, vaddr_t faultaddress){
+
+    if (faultaddress == 0x0) {
+        DEBUG(DB_VM,"vm_fault: faultaddress is NULL\n");
+        return EFAULT; // Null pointer dereference
+    }
+
     if (faultaddress >= USERSPACETOP) {
         DEBUG(DB_VM,"vm_fault: faultaddress 0x%x is above USERSPACETOP 0x%x\n", faultaddress, USERSPACETOP);
         return EFAULT; // Invalid address
@@ -469,20 +478,15 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         return EFAULT; // No valid region found for the fault address
     }
 
-    if (faulttype == VM_FAULT_READONLY) {
-        // If the fault is read-only, we can handle it as a read fault
-        kprintf("vm_fault: handling read-only fault at address 0x%x\n", faultaddress);
-    }
-
-
-
     vaddr_t third_level_index, third_level_pt;
     third_level_index = THIRD_LEVEL_MASK(faultaddress);
     third_level_pt = get_last_level_pt(faultaddress, curproc->p_addrspace);
     struct page_table *pt = (struct page_table *)third_level_pt;
 
-    if (pt->entries[third_level_index].valid && faulttype == VM_FAULT_WRITE 
-            && pt->entries[third_level_index].cow) {
+    if (pt->entries[third_level_index].valid && 
+            (faulttype == VM_FAULT_WRITE || faulttype == VM_FAULT_READONLY) &&
+                 pt->entries[third_level_index].cow)
+    {
         // Handle copy-on-write (COW) case
         unsigned int frame_num = pt->entries[third_level_index].frame;
         // Allocate a new page for the COW
@@ -492,36 +496,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         }
         KASSERT(new_page_frame < total_pages); // Ensure the page frame is within bounds
 
-        void *kernel_buffer = kmalloc(PAGE_SIZE);
-        if (kernel_buffer == NULL)
-        {
-            // Clean up the allocated page
-            kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(new_page_frame)));
-            return ENOMEM;
-        }
 
-        // Copy from old page to kernel buffer
-        int result = copyin((const_userptr_t)(faultaddress & PAGE_FRAME),
-                            kernel_buffer, PAGE_SIZE);
-        if (result)
-        {
-            panic("vm_fault: copyin failed with error %d\n", result);
-            kfree(kernel_buffer);
-            kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(new_page_frame)));
-            return result;
-        }
-
-        // Copy from kernel buffer to new page
-        result = copyout(kernel_buffer,
-                         (userptr_t)(faultaddress & PAGE_FRAME), PAGE_SIZE);
-
-        kfree(kernel_buffer);
-
-        if (result)
-        {
-            panic("vm_fault: copyout failed with error %d\n", result); 
-            return result;
-        }
         // Update the page table entry to point to the new page
         pt->entries[third_level_index].frame = new_page_frame;
         pt->entries[third_level_index].valid = 1;
@@ -530,10 +505,20 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         pt->entries[third_level_index].writable = region->writeable || region->temp_write;
         pt->entries[third_level_index].executable = region->executable;
         pt->entries[third_level_index].cow = 0; // Clear COW since we copied it
-        // Decrement the reference count of the old page
-        kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(frame_num)));
 
-        tlb_shootdown_individual(faultaddress, curproc->p_addrspace->asid);  
+        void *old_page_kaddr = (void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(frame_num));
+        void *new_page_kaddr = (void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(new_page_frame));
+
+        //memset(new_page_kaddr, 0xa, PAGE_SIZE); // Initialize the new page to zero
+
+
+        // Copy the contents of the old page to the new page
+        memcpy(new_page_kaddr, old_page_kaddr, PAGE_SIZE); 
+
+        tlb_shootdown_individual(faultaddress, curproc->p_addrspace->asid);
+
+        // Free the old page
+        kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(frame_num)));
     }
 
     if (pt->entries[third_level_index].valid == 0) {
@@ -555,10 +540,11 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     int frame = pt->entries[third_level_index].frame;
     int valid = pt->entries[third_level_index].valid;
     int writable = pt->entries[third_level_index].writable;
+    uint8_t asid = curproc->p_addrspace->asid;
     // Updating the TLB entry
     // We need to set the TLBHI and TLBLO entries 
     uint32_t tlbhi = faultaddress & TLBHI_VPAGE;
-    tlbhi |= (curproc->p_addrspace->asid << TLBHI_ASID_SHIFT) & TLBHI_PID;
+    tlbhi |= (asid << TLBHI_ASID_SHIFT) & TLBHI_PID;
     uint32_t tlblo = (PAGE_TO_PADDR(frame)& TLBLO_PPAGE) |
                      (writable ? TLBLO_DIRTY : 0) |
                      (valid ? TLBLO_VALID : 0);
@@ -605,8 +591,8 @@ void tlb_invalidate_vaddr(const struct tlbshootdown *ts) {
     // Read all TLB entries and invalidate the one matching the vaddr
     for (int i = 0; i < NUM_TLB; i++) {
         tlb_read(&entryhi, &entrylo, i);
-        if (!(entrylo & TLBLO_VALID ||
-              ((entryhi & TLBHI_PID) >> TLBHI_ASID_SHIFT) != ts->asid))
+        if (!(entrylo & TLBLO_VALID) ||
+              ((entryhi & TLBHI_PID) >> TLBHI_ASID_SHIFT) != ts->asid)
         {
             continue; // Skip invalid entries
         }
@@ -639,13 +625,12 @@ void tlb_invalidate_asid_entries(uint32_t asid) {
 }
 
 void tlb_shootdown_individual(vaddr_t vaddr, uint8_t asid) {
+    int spl = splhigh();
     struct tlbshootdown ts; 
     unsigned int i;
     ts.asid = asid; // ASID to invalidate 
     ts.type = TLB_SHOOTDOWN_INDIVIDUAL;
-    ts.vaddr = vaddr; // Virtual address to invalidate
-    vm_tlbshootdown(&ts);
-    
+    ts.vaddr = vaddr; // Virtual address to invalidate 
     // Send IPI to other CPUs
     for (i = 0; i < num_cpus; i++)
     {
@@ -657,6 +642,7 @@ void tlb_shootdown_individual(vaddr_t vaddr, uint8_t asid) {
             ipi_tlbshootdown(cpu, &ts);
         }
     }
+    splx(spl);
 }
 
 void all_tlb_shootdown(void) {
@@ -665,7 +651,6 @@ void all_tlb_shootdown(void) {
     ts.asid = 0; // ASID 0 means all ASIDs
     ts.type = TLB_SHOOTDOWN_ALL;
     ts.vaddr = 0; // Not used for full shootdown
-    vm_tlbshootdown(&ts);
     
     for (i = 0; i < num_cpus; i++)
     {
@@ -695,7 +680,6 @@ void shootdown_all_asid(uint8_t asid) {
     ts.asid = asid;
     ts.type = TLB_SHOOTDOWN_ASID;
     ts.vaddr = 0; // Not used for ASID shootdown
-    vm_tlbshootdown(&ts);
     for (i = 0; i < num_cpus; i++)
     {
         struct cpu *cpu = cpu_get_by_number(i);
