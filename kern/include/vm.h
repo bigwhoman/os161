@@ -100,5 +100,6 @@ void show_all_tlb_entries(void);
 
 void all_tlb_shootdown(void);
 
+void print_memory_contents(vaddr_t start_addr, int count);
 
 #endif /* _VM_H_ */

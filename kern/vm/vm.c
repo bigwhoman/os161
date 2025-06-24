@@ -184,6 +184,8 @@ vaddr_t alloc_kpages(unsigned npages){
         coremap[page].next_free = coremap[ending_page].next_free;
         /* TODO: Need to fix this timestamp*/
         coremap[page].last_access = 1000;
+        if (!coremap[page].kernel)
+            KASSERT(coremap[page].start = coremap[page].end);
     }
     
 
@@ -230,10 +232,11 @@ void free_kpages(vaddr_t addr){
         coremap[page].last_access = 1000; 
 
         next_page = coremap[page].next_allocated;
+        if (!coremap[page].kernel)
+            KASSERT(coremap[page].start = coremap[page].end);
         if (coremap[page].reference_count == 0)
         {
             coremap[page].allocated = 0;
-            coremap[page].kernel = 0;
             if (curthread != NULL && curproc != NULL)
                 coremap[page].owner = 0;
 
@@ -245,8 +248,7 @@ void free_kpages(vaddr_t addr){
                 if (!coremap[p_num].allocated)
                     break;
             }
-
-            memset(&coremap[page], 0, sizeof(struct coremap_entry));
+            KASSERT(coremap[page].reference_count == 0); 
         }
         page = next_page;
     }
@@ -430,6 +432,28 @@ void *copy_page_table(void *page_table, size_t level) {
 }
 
 
+void print_memory_contents(vaddr_t start_addr, int count) {
+    kprintf("=== Virtual Memory Contents (starting at 0x%08x) for %p ===\n", (unsigned int)start_addr, curproc);
+    
+    for (int i = 0; i < count; i++) {
+        vaddr_t current_addr = start_addr + (i * sizeof(int));
+        int value;
+        int err = copyin((userptr_t)current_addr, &value, sizeof(int));
+        
+        if (err) {
+            kprintf("[%02d] 0x%08x: <read error>\n", i, (unsigned int)current_addr);
+        } else {
+            // Print as both hex and try as string pointer
+            kprintf("[%02d] 0x%08x: 0x%08x", i, (unsigned int)current_addr, value);
+            
+            // Try to interpret as string pointer
+            kprintf("\n");
+        }
+    }
+    kprintf("=== End Memory Content ===\n");
+}
+
+
 /* Fault handling function called by trap code */
 int vm_fault(int faulttype, vaddr_t faultaddress){
 
@@ -507,6 +531,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         pt->entries[third_level_index].cow = 0; // Clear COW since we copied it
 
         void *old_page_kaddr = (void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(frame_num));
+        print_memory_contents(faultaddress, 30); // Print old page contents for debugging
         void *new_page_kaddr = (void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(new_page_frame));
 
         //memset(new_page_kaddr, 0xa, PAGE_SIZE); // Initialize the new page to zero
@@ -518,7 +543,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         tlb_shootdown_individual(faultaddress, curproc->p_addrspace->asid);
 
         // Free the old page
-        kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(frame_num)));
+        kfree(old_page_kaddr);
     }
 
     if (pt->entries[third_level_index].valid == 0) {

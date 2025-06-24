@@ -9,7 +9,6 @@
 
 
 static int copy_file_descriptors(struct proc *src, struct proc *dst); 
-void print_memory_contents(vaddr_t start_addr, int count);
 /* execv replaces the currently executing program with
  * a newly loaded program image.
  * This occurs within one process; the process id is unchanged.
@@ -269,28 +268,6 @@ int sys_execv(const char *program, char *argv[], int *retval){
     return err;
 } 
 
-
-
-void print_memory_contents(vaddr_t start_addr, int count) {
-    kprintf("=== Virtual Memory Contents (starting at 0x%08x) ===\n", (unsigned int)start_addr);
-    
-    for (int i = 0; i < count; i++) {
-        vaddr_t current_addr = start_addr + (i * sizeof(int));
-        int value;
-        int err = copyin((userptr_t)current_addr, &value, sizeof(int));
-        
-        if (err) {
-            kprintf("[%02d] 0x%08x: <read error>\n", i, (unsigned int)current_addr);
-        } else {
-            // Print as both hex and try as string pointer
-            kprintf("[%02d] 0x%08x: 0x%08x", i, (unsigned int)current_addr, value);
-            
-            // Try to interpret as string pointer
-            kprintf("\n");
-        }
-    }
-    kprintf("=== End Memory Content ===\n");
-}
 
 /* fork duplicates the currently running process. 
  * The two copies are identical, except that one (
