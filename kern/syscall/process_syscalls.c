@@ -395,7 +395,7 @@ int sys_exit(int status) {
     
     /* Detach from our process */
     proc_remthread(curthread);
-    
+ 
     /* Thread exit - doesn't return */
     thread_exit();
     

@@ -340,6 +340,11 @@ as_activate(void)
 		 */
 		as->asid = get_asid();
 	}
+
+	
+	// Shootdown on every context switch
+	// TODO: Will change this later
+	tlb_shootdown_all();
 }
 
 void
@@ -392,9 +397,9 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	}
 	region->start = vaddr;
 	region->size = memsize;
-	region->readable = readable | executable;
-	region->writeable = writeable;
-	region->executable = executable;
+	region->readable = (readable | executable) ? 1 : 0;
+	region->writeable = writeable ? 1 : 0;
+	region->executable = executable ? 1 : 0;
 	region->temp_write = 0; /* Temporary write permission not set */
 	region->next = NULL; /* Insert at the beginning of the list */
 
