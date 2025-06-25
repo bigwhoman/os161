@@ -336,7 +336,8 @@ unsigned int coremap_alloc_userpage(){
     spinlock_release(&coremap_lock);
     KASSERT(coremap[page].allocated == 1);
     KASSERT(coremap[page].start == 1);
-    
+    KASSERT(page < total_pages); // Ensure the page frame is within bounds
+
     return page;
 }
 
@@ -396,10 +397,12 @@ void *copy_page_table(void *page_table, size_t level) {
             } else {
                 // Level 3 (leaf level) - implement COW
                 // Copy the page table entry
-                new_pt->entries[i] = src_pt->entries[i];
+
+                spinlock_acquire(&coremap_lock);
+                memcpy( &new_pt->entries[i], &src_pt->entries[i], sizeof(struct page_table_entry));
                 
                 // If the page was writable, make it COW
-                if (src_pt->entries[i].writable) {
+                if (src_pt->entries[i].writable || src_pt->entries[i].cow) {
                     // Mark both parent and child as COW and read-only
                     src_pt->entries[i].cow = 1;
                     src_pt->entries[i].writable = 0;
@@ -407,23 +410,12 @@ void *copy_page_table(void *page_table, size_t level) {
                     new_pt->entries[i].cow = 1;
                     new_pt->entries[i].writable = 0;
                     
-                    // Increment reference count for the physical frame
-                    unsigned int frame_num = src_pt->entries[i].frame;
-                    spinlock_acquire(&coremap_lock);
-                    coremap[frame_num].reference_count++;
-                    spinlock_release(&coremap_lock);
-                    
-                    // TODO: Invalidate TLB entries for this page in parent process
-                    
-                }
-                // If page was read-only, just share it normally (no COW needed)
-                // The frame is already being shared, increment ref count
-                if (!src_pt->entries[i].cow) {
-                    unsigned int frame_num = src_pt->entries[i].frame;
-                    spinlock_acquire(&coremap_lock);
-                    coremap[frame_num].reference_count++;
-                    spinlock_release(&coremap_lock);
-                }
+                } 
+
+                // Increment reference count for the physical frame
+                unsigned int frame_num = src_pt->entries[i].frame;
+                coremap[frame_num].reference_count++;
+                spinlock_release(&coremap_lock);
             }
         }
     }
@@ -518,8 +510,6 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         if (new_page_frame == 0) {
             return ENOMEM; // Out of memory
         }
-        KASSERT(new_page_frame < total_pages); // Ensure the page frame is within bounds
-
 
         // Update the page table entry to point to the new page
         pt->entries[third_level_index].frame = new_page_frame;
@@ -531,11 +521,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         pt->entries[third_level_index].cow = 0; // Clear COW since we copied it
 
         void *old_page_kaddr = (void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(frame_num));
-        print_memory_contents(faultaddress, 30); // Print old page contents for debugging
         void *new_page_kaddr = (void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(new_page_frame));
-
-        //memset(new_page_kaddr, 0xa, PAGE_SIZE); // Initialize the new page to zero
-
 
         // Copy the contents of the old page to the new page
         memcpy(new_page_kaddr, old_page_kaddr, PAGE_SIZE); 
