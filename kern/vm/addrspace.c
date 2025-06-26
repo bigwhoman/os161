@@ -81,7 +81,7 @@ uint8_t get_asid(){
 
 
 		/* Invalidate all TLB entries for all cores */
-		all_tlb_shootdown(); 
+		tlb_shootdown_all(); 	
 		for ( i = 1; i < MAX_ASID; i++)
 		{
 			bitmap_unmark(asid_bitmap, i); /* Free all ASIDs */
@@ -329,8 +329,15 @@ as_activate(void)
 
 	
 	// Shootdown on every context switch
-	// TODO: Will change this later
-	tlb_shootdown_all();
+	int spl = splhigh();
+	__asm volatile(
+		"mtc0 %0, $10;"
+		"ssnop;"
+		"ssnop;"
+		:
+		: "r" (((as->asid) << 6) & 0xfc0)
+	);	
+	splx(spl);
 }
 
 void

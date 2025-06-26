@@ -577,7 +577,7 @@ void vm_tlbshootdown(const struct tlbshootdown *ts) {
             break;
             
         case TLB_SHOOTDOWN_ALL:
-            tlb_shootdown_all();
+            tlb_shootdown();
             break;
 
         case TLB_SHOOTDOWN_INDIVIDUAL:
@@ -656,7 +656,7 @@ void tlb_shootdown_individual(vaddr_t vaddr, uint8_t asid) {
     splx(spl);
 }
 
-void all_tlb_shootdown(void) {
+void tlb_shootdown_all(void) {
     struct tlbshootdown ts;
     unsigned int i;
     ts.asid = 0; // ASID 0 means all ASIDs
@@ -676,7 +676,7 @@ void all_tlb_shootdown(void) {
 }
 
 /* Do a full tlb shootdown */
-void tlb_shootdown_all(void) {
+void tlb_shootdown(void) {
     // Invalidate all TLB entries
     int spl = splhigh();
     for (int i = 0; i < NUM_TLB; i++) {

@@ -98,7 +98,7 @@ void show_valid_tlb_entries(void);
 
 void show_all_tlb_entries(void);
 
-void all_tlb_shootdown(void);
+void tlb_shootdown(void);
 
 void print_memory_contents(vaddr_t start_addr, int count);
 
