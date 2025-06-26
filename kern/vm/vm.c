@@ -214,7 +214,6 @@ void free_kpages(vaddr_t addr){
     }
     // DEBUG(DB_VM, "Deallocating %d pages for %d \n", coremap[page].allocation_size, coremap[page].owner);
 
-    used_pages -= coremap[page].allocation_size;
     /* TODO: Check the owner and pid */ 
     next_page = page;
     for (i = 0; i < coremap[page].allocation_size; i++)
@@ -222,7 +221,7 @@ void free_kpages(vaddr_t addr){
         p_num = page;
         if (!coremap[page].allocated)
         {
-            panic("Tried freeing non-allocated page : %d -- allocsize : %d", page, coremap[page].allocation_size);
+            panic("Tried freeing non-allocated page : 0x%x -- allocsize : 0x%x", page, coremap[page].allocation_size);
         }
 
         /* TODO: Make this reference counting based !!! */
@@ -248,7 +247,8 @@ void free_kpages(vaddr_t addr){
                 if (!coremap[p_num].allocated)
                     break;
             }
-            KASSERT(coremap[page].reference_count == 0); 
+            KASSERT(coremap[page].reference_count == 0);
+            used_pages -= 1; 
         }
         page = next_page;
     }

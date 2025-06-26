@@ -112,8 +112,6 @@ as_create(void)
 	as->stack_top = USERSTACK; /* initial stack pointer */
 	as->stack_bottom = USERSTACK; /* bottom of stack */
 
-	as->ref_count = 1; /* initial reference count */
-
 	as->addrlock = lock_create("addrspace_lock");
 	if (as->addrlock == NULL) {
 		kfree(as);
@@ -215,11 +213,6 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		return ENOMEM; /* Failed to create lock for new address space */
 	}
 
-	lock_acquire(old->addrlock);
-	/* This would probably need to be changed for COW */
-	old->ref_count += 1; /* Increment reference count for the old address space */
-	newas->ref_count = old->ref_count; /* Set initial reference count for the new address space */
-	lock_release(old->addrlock);
 
 	/*
 	 * Deep copy the linked list of memory regions.
@@ -278,13 +271,6 @@ as_destroy(struct addrspace *as)
 
 	KASSERT(as != NULL);
 	struct vm_region *region, *next_region;
-	lock_acquire(as->addrlock); /* Acquire the lock to ensure thread safety */
-	as->ref_count -= 1; /* Decrement the reference count */
-	if (as->ref_count > 0) {
-		lock_release(as->addrlock); /* Release the lock if there are still references */
-		return; /* Don't destroy the address space if there are still references */
-	}
-	lock_release(as->addrlock); /* Release the lock before freeing */
 	while(as->regions != NULL) {
 		region = as->regions;
 		next_region = region->next;

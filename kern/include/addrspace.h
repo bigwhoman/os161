@@ -56,8 +56,6 @@ struct addrspace {
         struct vm_region *stack_region; /* linked list of stack regions */
         struct vm_region *heap_region; /* linked list of heap regions */
 
-        int ref_count; /* reference count for this address space */
-
         uint8_t asid; /* address space identifier */
 
         struct lock* addrlock; /* lock for this address space */
