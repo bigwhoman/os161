@@ -18,6 +18,8 @@ paddr_t get_last_level_pt(vaddr_t vaddr, struct addrspace *as);
 unsigned int coremap_alloc_userpage(void);
 /* Coremap Spinlock */
 static struct spinlock coremap_lock = SPINLOCK_INITIALIZER;
+static struct spinlock cow_lock = SPINLOCK_INITIALIZER;
+static struct spinlock tlb_lock = SPINLOCK_INITIALIZER;
 
 
 void init_coremap(paddr_t start_paddr, size_t num_pages){
@@ -503,6 +505,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
             (faulttype == VM_FAULT_WRITE || faulttype == VM_FAULT_READONLY) &&
                  pt->entries[third_level_index].cow)
     {
+        spinlock_acquire(&cow_lock); 
         // Handle copy-on-write (COW) case
         unsigned int frame_num = pt->entries[third_level_index].frame;
         // Allocate a new page for the COW
@@ -525,6 +528,8 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
 
         // Copy the contents of the old page to the new page
         memcpy(new_page_kaddr, old_page_kaddr, PAGE_SIZE); 
+
+        spinlock_release(&cow_lock); 
 
         tlb_shootdown_individual(faultaddress, curproc->p_addrspace->asid);
 
@@ -561,7 +566,31 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
                      (valid ? TLBLO_VALID : 0);
     // DEBUG(DB_VM /*disable for now */, "vm_fault ---> addr : 0x%x, third_level_index : %x, frame : %x, paddr : %x, loo : %x, tlbhi : 0x%x, tlblo : 0x%x\n",
     //       faultaddress, third_level_index, pt->entries[third_level_index].frame, PAGE_TO_PADDR(pt->entries[third_level_index].frame), (PAGE_TO_PADDR(pt->entries[third_level_index].frame)& TLBLO_PPAGE), tlbhi, tlblo);
-    tlb_random(tlbhi, tlblo);
+    // DEBUG(DB_VM, "fault : %p, %p\n", (void *)faultaddress, curproc);
+    int spl = splhigh();
+    int existing_index = tlb_probe(tlbhi, 0);
+    if (existing_index >= 0)
+    {
+        uint32_t existing_hi, existing_lo;
+        tlb_read(&existing_hi, &existing_lo, existing_index);
+
+        uint32_t existing_asid = (existing_hi & TLBHI_PID) >> TLBHI_ASID_SHIFT;
+        uint32_t existing_vpage = existing_hi & TLBHI_VPAGE;
+
+        kprintf("DUPLICATE FOUND: proc %d, vaddr 0x%x, asid %d\n",
+                curproc->pid, faultaddress, asid);
+        kprintf("  Existing entry: index %d, asid %d, vpage 0x%x\n",
+                existing_index, existing_asid, existing_vpage);
+        kprintf("  New entry: asid %d, vpage 0x%x\n", asid, faultaddress & TLBHI_VPAGE);
+
+        // Update the existing entry
+        tlb_write(tlbhi, tlblo, existing_index);
+    }
+    else
+    {
+        tlb_random(tlbhi, tlblo);
+    }
+    splx(spl);
     return 0;
 }
 
@@ -596,24 +625,25 @@ void vm_tlbshootdown(const struct tlbshootdown *ts) {
 /* Invalidate a vaddr in the TLB */
 void tlb_invalidate_vaddr(const struct tlbshootdown *ts) {
     KASSERT(ts != NULL);
-    int spl = splhigh();
+    
+    spinlock_acquire(&tlb_lock); 
     uint32_t entryhi, entrylo;
+    uint32_t tlbhi = ts->vaddr & TLBHI_VPAGE;
+    tlb_random(tlbhi | (((ts->asid + 5) << TLBHI_ASID_SHIFT) & TLBHI_PID), 0x12345000);
+    tlb_random(tlbhi | (((ts->asid + 6) << TLBHI_ASID_SHIFT) & TLBHI_PID), 0x12345000);
+    tlbhi |= (ts->asid << TLBHI_ASID_SHIFT) & TLBHI_PID;
+    show_all_tlb_entries();
+    int index = tlb_probe(tlbhi, 0);
+    if (index >= 0) {
+        // If the entry is found, invalidate it
+        int spl = splhigh();
+        tlb_read(&entryhi, &entrylo, index);
+        kprintf("entryhi = 0x%x, entrylo = 0x%x\n", entryhi, entrylo);
+        tlb_write(TLBHI_INVALID(index), TLBLO_INVALID(), index);
+        splx(spl);
+    } 
+    spinlock_release(&tlb_lock);
     
-    // Read all TLB entries and invalidate the one matching the vaddr
-    for (int i = 0; i < NUM_TLB; i++) {
-        tlb_read(&entryhi, &entrylo, i);
-        if (!(entrylo & TLBLO_VALID) ||
-              ((entryhi & TLBHI_PID) >> TLBHI_ASID_SHIFT) != ts->asid)
-        {
-            continue; // Skip invalid entries
-        }
-        if ((entryhi & TLBHI_VPAGE) == (ts->vaddr & TLBHI_VPAGE))
-        {
-            tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
-        }
-    }
-    
-    splx(spl);
 }
 
 /*

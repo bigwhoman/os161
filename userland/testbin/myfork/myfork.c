@@ -52,9 +52,16 @@ main(int argc, char *argv[])
 	(void) argv;
 	(void) argc;
 	warnx("starting the fork\n");
-	int res;
+	int res2;
+	int a;
+	a = 25;
 	fork();
-	res = fork();
-	printf("miow from %d\n",res);
+	fork();
+	int b;
+	b = 0;
+	b = a - 1;
+	printf("shoopi from %d\n", b);
+	res2 = fork();
+	printf("miow from %d\n",res2);
 	return 0;
 }
