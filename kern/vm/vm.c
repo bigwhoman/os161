@@ -280,8 +280,7 @@ vaddr_t get_last_level_pt(vaddr_t vaddr, struct addrspace *as){
     first_level_index = FIRST_LEVEL_MASK(vaddr);
     if (pt->entries[first_level_index].valid == 0){
         pt->entries[first_level_index].valid = 1;
-        new_pt = kmalloc(sizeof(struct page_table));
-        memset(new_pt, 0, sizeof(struct page_table)); // Initialize the new page table
+        new_pt = create_page_table();
         KASSERT(new_pt != NULL);
         // DEBUG(DB_VM, "Creating new page table 2 - index %x - %p - %x\n",
         //                          first_level_index, new_pt, PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt)));
@@ -301,8 +300,7 @@ vaddr_t get_last_level_pt(vaddr_t vaddr, struct addrspace *as){
     second_level_index = SECOND_LEVEL_MASK(vaddr);
     if (pt->entries[second_level_index].valid == 0){
         pt->entries[second_level_index].valid = 1;
-        new_pt = kmalloc(sizeof(struct page_table));
-        memset(new_pt, 0, sizeof(struct page_table)); // Initialize the new page table
+        new_pt = create_page_table();
         KASSERT(new_pt != NULL);
         // DEBUG(DB_VM, "Creating new page table 3 - index %x - %p - %x\n",
         //                          second_level_index, new_pt, PADDR_TO_PAGE(KVADDR_TO_PADDR((int)new_pt)));
@@ -358,9 +356,25 @@ void free_page_table(void *page_table, size_t level){
                 free_page_table(next_pt, level + 1);
             }
             // Free the current page table entry
+            // lock_destroy(pt->pt_lock); // Destroy the lock associated with this page table
             kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[i].frame)));
         }
     }
+}
+
+struct page_table *create_page_table(void) {
+    struct page_table *pt = kmalloc(sizeof(struct page_table));
+    if (pt == NULL) {
+        return NULL; // Out of memory
+    } 
+    memset(pt, 0, sizeof(struct page_table)); // Initialize the page table
+    pt->pt_lock = lock_create("page_table_lock");
+    if (pt->pt_lock == NULL)
+    {
+        kfree(pt);
+        return NULL; // Failed to create lock
+    }
+    return pt;
 }
 
 void *copy_page_table(void *page_table, size_t level) {
@@ -369,10 +383,12 @@ void *copy_page_table(void *page_table, size_t level) {
     if (src_pt == NULL) {
         return NULL; // Nothing to copy
     }
+    lock_acquire(src_pt->pt_lock); // Acquire lock for the source page table
     
     // Allocate new page table for this level
-    struct page_table *new_pt = kmalloc(sizeof(struct page_table));
+    struct page_table *new_pt = create_page_table();
     if (new_pt == NULL) {
+        lock_release(src_pt->pt_lock);
         return NULL; // Out of memory
     }
     
@@ -388,6 +404,7 @@ void *copy_page_table(void *page_table, size_t level) {
                 
                 if (new_next_pt == NULL) {
                     // Cleanup on failure - free what we've allocated so far
+                    lock_release(src_pt->pt_lock);
                     free_page_table(new_pt, level);
                     return NULL;
                 }
@@ -421,7 +438,7 @@ void *copy_page_table(void *page_table, size_t level) {
             }
         }
     }
-    
+    lock_release(src_pt->pt_lock); // Release lock for the source page table 
     return new_pt;
 }
 
@@ -627,18 +644,14 @@ void tlb_invalidate_vaddr(const struct tlbshootdown *ts) {
     KASSERT(ts != NULL);
     
     spinlock_acquire(&tlb_lock); 
-    uint32_t entryhi, entrylo;
     uint32_t tlbhi = ts->vaddr & TLBHI_VPAGE;
-    tlb_random(tlbhi | (((ts->asid + 5) << TLBHI_ASID_SHIFT) & TLBHI_PID), 0x12345000);
-    tlb_random(tlbhi | (((ts->asid + 6) << TLBHI_ASID_SHIFT) & TLBHI_PID), 0x12345000);
+
     tlbhi |= (ts->asid << TLBHI_ASID_SHIFT) & TLBHI_PID;
-    show_all_tlb_entries();
+
     int index = tlb_probe(tlbhi, 0);
     if (index >= 0) {
-        // If the entry is found, invalidate it
+        // Invalidate the found TLB entry
         int spl = splhigh();
-        tlb_read(&entryhi, &entrylo, index);
-        kprintf("entryhi = 0x%x, entrylo = 0x%x\n", entryhi, entrylo);
         tlb_write(TLBHI_INVALID(index), TLBLO_INVALID(), index);
         splx(spl);
     } 

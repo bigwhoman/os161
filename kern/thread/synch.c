@@ -182,6 +182,9 @@ lock_destroy(struct lock *lock)
 	kfree(lock->holder);
 	kfree(lock->lk_name);
 	kfree(lock);
+	lock -> holder = NULL;
+	lock -> lk_name = NULL;
+	lock -> mutex_wchan = NULL;
 	lock = NULL;
 }
 

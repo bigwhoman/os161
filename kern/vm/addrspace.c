@@ -129,14 +129,13 @@ as_create(void)
 	 * Initialize the page table base address to 0.
 	 * This will be set up properly when the process is loaded.
 	 */
-	as->pt = kmalloc(sizeof(struct page_table));
+	as->pt = create_page_table(); 
 	if (as->pt == NULL) {
 		lock_destroy(as->addrlock);
 		kfree(as);
 		return NULL; /* Failed to allocate page table */
 	}	
 
-    memset(as->pt, 0, sizeof(struct page_table)); // Initialize the new page table
 	// Initialize the linked list of special memory regions.
 	as->regions = NULL; /* linked list of memory regions */
 

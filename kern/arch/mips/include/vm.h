@@ -155,7 +155,8 @@ struct page_table_entry {
  * The page table is an array of page table entries.
  */
 struct page_table {
-        struct page_table_entry entries[PAGE_TABLE_SIZE]; /* array of page table entries */
+        struct page_table_entry entries[PAGE_TABLE_SIZE]; /* array of page table entries */	
+		struct lock *pt_lock; /* lock for this page table */
 };
 
 struct coremap_entry* coremap;

@@ -102,4 +102,6 @@ void tlb_shootdown(void);
 
 void print_memory_contents(vaddr_t start_addr, int count);
 
+struct page_table *create_page_table(void);
+
 #endif /* _VM_H_ */
