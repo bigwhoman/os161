@@ -355,11 +355,13 @@ void free_page_table(void *page_table, size_t level){
                 struct page_table *next_pt = (struct page_table *)PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[i].frame));
                 free_page_table(next_pt, level + 1);
             }
-            // Free the current page table entry
-            // lock_destroy(pt->pt_lock); // Destroy the lock associated with this page table
+            // Free the current page table entry 
             kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[i].frame)));
         }
     }
+    lock_destroy(pt->pt_lock); // Destroy the lock associated with this page table
+    if (level == 1)
+        kfree(pt);
 }
 
 struct page_table *create_page_table(void) {
@@ -391,9 +393,7 @@ void *copy_page_table(void *page_table, size_t level) {
         lock_release(src_pt->pt_lock);
         return NULL; // Out of memory
     }
-    
-    // Initialize the new page table
-    memset(new_pt, 0, sizeof(struct page_table));
+
     
     for (size_t i = 0; i < PAGE_TABLE_SIZE; i++) {
         if (src_pt->entries[i].valid) {

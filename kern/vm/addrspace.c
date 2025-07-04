@@ -205,7 +205,9 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	newas->stack_bottom = old->stack_bottom; /* Copy stack bottom */
 	newas->heap_base = old->heap_base; /* Copy heap base */
 	newas->heap_end = old->heap_end; /* Copy heap end */
-	newas->asid = 0; /* TODO: Not sure -- Copy ASID */
+	newas->asid = 0; /* This would be assinged when process gets activated */
+
+	// TODO: probably redundant 
 	newas->addrlock = lock_create("new_addrspace_lock");
 	if (newas->addrlock == NULL) {
 		kfree(newas);
@@ -294,8 +296,7 @@ as_destroy(struct addrspace *as)
         spinlock_release(&addrspace_lock);
     }
 	/* Free the page table */
-	free_page_table(as->pt, 1); /* Free the page table */
-	kfree(as->pt);				/* Free the page table structure */
+	free_page_table(as->pt, 1); /* Free the page table */	
 	lock_destroy(as->addrlock); /* Destroy the lock */
 
 	kfree(as);

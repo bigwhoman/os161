@@ -147,7 +147,7 @@ struct page_table_entry {
 		unsigned int cow : 1; /* copy-on-write bit */
 };
 
-#define PAGE_TABLE_SIZE (PAGE_SIZE / sizeof(struct page_table_entry)) /* Size of the page table */
+#define PAGE_TABLE_SIZE ((PAGE_SIZE - sizeof(struct lock*)) / sizeof(struct page_table_entry)) /* Size of the page table */
 
 /*
  * Page table - maps virtual addresses to physical addresses.
