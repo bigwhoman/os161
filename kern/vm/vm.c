@@ -517,7 +517,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     third_level_index = THIRD_LEVEL_MASK(faultaddress);
     third_level_pt = get_last_level_pt(faultaddress, curproc->p_addrspace);
     struct page_table *pt = (struct page_table *)third_level_pt;
-
+    lock_acquire(pt->pt_lock); // Acquire the page table lock
     if (pt->entries[third_level_index].valid && 
             (faulttype == VM_FAULT_WRITE || faulttype == VM_FAULT_READONLY) &&
                  pt->entries[third_level_index].cow)
@@ -545,7 +545,6 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
 
         // Copy the contents of the old page to the new page
         memcpy(new_page_kaddr, old_page_kaddr, PAGE_SIZE); 
-
         spinlock_release(&cow_lock); 
 
         tlb_shootdown_individual(faultaddress, curproc->p_addrspace->asid);
@@ -558,6 +557,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         // Page fault: allocate a new page
         unsigned int new_page_frame = coremap_alloc_userpage(); // Allocate one page
         if (new_page_frame == 0) {
+            lock_release(pt->pt_lock); // Release the page table lock
             return ENOMEM; // Out of memory
         }
         KASSERT(new_page_frame < total_pages); // Ensure the page frame is within bounds
@@ -607,6 +607,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     {
         tlb_random(tlbhi, tlblo);
     }
+    lock_release(pt->pt_lock); // Release the page table lock
     splx(spl);
     return 0;
 }
