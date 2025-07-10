@@ -187,6 +187,7 @@ as_create(void)
 int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
+	spinlock_acquire(&addrspace_lock);
 	struct addrspace *newas;
 	KASSERT(old != NULL);
 	KASSERT(ret != NULL);
@@ -260,12 +261,14 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 
 
 	*ret = newas;
+	spinlock_release(&addrspace_lock);
 	return 0;
 }
 
 void
 as_destroy(struct addrspace *as)
 {
+	spinlock_acquire(&addrspace_lock);
 	/*
 	 * Clean up as needed.
 	 */
@@ -289,17 +292,16 @@ as_destroy(struct addrspace *as)
 	
 	/* Free the address space structure */
 	if (as->asid != 0) { 
-        spinlock_acquire(&addrspace_lock);
         // Send shootdown to ALL other CPUs
 		shootdown_all_asid(as->asid);
 		bitmap_unmark(asid_bitmap, as->asid);
-        spinlock_release(&addrspace_lock);
     }
 	/* Free the page table */
 	free_page_table(as->pt, 1); /* Free the page table */	
 	lock_destroy(as->addrlock); /* Destroy the lock */
 
 	kfree(as);
+	spinlock_release(&addrspace_lock);
 }
 
 /*

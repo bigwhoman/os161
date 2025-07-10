@@ -344,6 +344,7 @@ unsigned int coremap_alloc_userpage(){
 void free_page_table(void *page_table, size_t level){
     struct page_table *pt;
     pt = (struct page_table *)page_table;
+    lock_acquire(pt->pt_lock); // Acquire lock for the page table
     if (pt == NULL) {
         return; // Nothing to free
     }
@@ -359,6 +360,7 @@ void free_page_table(void *page_table, size_t level){
             kfree((void *)PADDR_TO_KVADDR(PAGE_TO_PADDR(pt->entries[i].frame)));
         }
     }
+    lock_release(pt->pt_lock); // Release lock for the page table
     lock_destroy(pt->pt_lock); // Destroy the lock associated with this page table
     if (level == 1)
         kfree(pt);
@@ -591,14 +593,14 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         uint32_t existing_hi, existing_lo;
         tlb_read(&existing_hi, &existing_lo, existing_index);
 
-        uint32_t existing_asid = (existing_hi & TLBHI_PID) >> TLBHI_ASID_SHIFT;
-        uint32_t existing_vpage = existing_hi & TLBHI_VPAGE;
+        // uint32_t existing_asid = (existing_hi & TLBHI_PID) >> TLBHI_ASID_SHIFT;
+        // uint32_t existing_vpage = existing_hi & TLBHI_VPAGE;
 
-        kprintf("DUPLICATE FOUND: proc %d, vaddr 0x%x, asid %d\n",
-                curproc->pid, faultaddress, asid);
-        kprintf("  Existing entry: index %d, asid %d, vpage 0x%x\n",
-                existing_index, existing_asid, existing_vpage);
-        kprintf("  New entry: asid %d, vpage 0x%x\n", asid, faultaddress & TLBHI_VPAGE);
+        // kprintf("DUPLICATE FOUND: proc %d, vaddr 0x%x, asid %d\n",
+        //         curproc->pid, faultaddress, asid);
+        // kprintf("  Existing entry: index %d, asid %d, vpage 0x%x\n",
+        //         existing_index, existing_asid, existing_vpage);
+        // kprintf("  New entry: asid %d, vpage 0x%x\n", asid, faultaddress & TLBHI_VPAGE);
 
         // Update the existing entry
         tlb_write(tlbhi, tlblo, existing_index);
