@@ -56,9 +56,7 @@
  */
 struct proc *kproc;
 static void proctable_add(struct proc *proc);
-void file_table_destroy(struct file_table *ft);
 static struct fd_entry *create_console_fd(int fd_num);
-struct file_table *file_table_create(void);
 /*
  * Create a proc structure.
  */

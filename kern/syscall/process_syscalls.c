@@ -301,6 +301,8 @@ int sys_fork(struct trapframe *tf, int *retval) {
     
     /* Copy file descriptors */
     if (curproc->fd_table != NULL) {
+        file_table_destroy(newproc->fd_table);
+        newproc->fd_table = file_table_create();
         err = copy_file_descriptors(curproc, newproc);
         if (err) {
             kfree(new_tf);
@@ -518,28 +520,31 @@ static int copy_file_descriptors(struct proc *src, struct proc *dst) {
     KASSERT(dst != NULL);
     KASSERT(src->fd_table != NULL);
     KASSERT(dst->fd_table != NULL);
-    
+    uint32_t ret;
+    ret = 0; 
     lock_acquire(src->fd_table->lock);
     lock_acquire(dst->fd_table->lock);
     /* Shallow copy all the file table entries 
      * and increment the reference count
      * for each file descriptor.
      */
-    int array_size = array_num(src->fd_table->entries);
-    array_preallocate(dst->fd_table->entries, array_size);
-    for (int i = 0; i < array_size; i++) {
+    int array_size = array_num(src->fd_table->entries); 
+    for (uint32_t i = 0; i < (uint32_t)array_size; i++) {
         struct fd_entry *src_fde = array_get(src->fd_table->entries, i);
         if (src_fde != NULL) {
+            lock_acquire(src_fde->lock);
             src_fde->count++;
-            array_set(dst->fd_table->entries, i, src_fde);
+            array_add(dst->fd_table->entries, src_fde, &ret);
 
+            KASSERT(ret == i);
             if (!bitmap_isset(dst->fd_table->bitmap, i))
                 /* Mark the bitmap */
                 bitmap_mark(dst->fd_table->bitmap, i);
+            lock_release(src_fde->lock);
         }
         else {
             /* If the source file descriptor is NULL, we can set the destination to NULL */
-            array_set(dst->fd_table->entries, i, NULL);
+            array_add(dst->fd_table->entries, NULL, &ret);
             if (bitmap_isset(dst->fd_table->bitmap, i))
                 /* Unmark the bitmap */
                 bitmap_unmark(dst->fd_table->bitmap, i);

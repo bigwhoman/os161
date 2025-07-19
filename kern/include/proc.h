@@ -147,5 +147,8 @@ struct addrspace *proc_getas(void);
 /* Change the address space of the current process, and return the old one. */
 struct addrspace *proc_setas(struct addrspace *);
 
+void file_table_destroy(struct file_table *ft);
+
+struct file_table *file_table_create(void);
 
 #endif /* _PROC_H_ */
